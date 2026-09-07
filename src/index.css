@@ -141,6 +141,18 @@ html[data-theme="violet"] {
   html {
     color-scheme: dark;
   }
+  /* 高分屏排版适配：超宽视口下整体字号微升（rem 布局随之等比缩放），
+     避免 1680px 容器在小字号下显得稀疏；粒度控制在 1px 内保证不破坏布局 */
+  @media (min-width: 1920px) {
+    html {
+      font-size: 17px;
+    }
+  }
+  @media (min-width: 2560px) {
+    html {
+      font-size: 18px;
+    }
+  }
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";

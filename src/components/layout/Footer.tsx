@@ -11,7 +11,7 @@ export function Footer() {
 
   return (
     <footer className="border-t border-border/60">
-      <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-between gap-3 px-4 py-6 sm:flex-row sm:px-6">
+      <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-between gap-3 px-4 py-6 sm:flex-row sm:px-6 2xl:max-w-[1680px] 2xl:px-10">
         <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
           CRYPTO STATUS · {themeLabel} EDITION
         </span>
@@ -33,7 +33,7 @@ export function Footer() {
           ))}
         </nav>
       </div>
-      <div className="mx-auto w-full max-w-7xl px-4 pb-6 sm:px-6">
+      <div className="mx-auto w-full max-w-7xl 2xl:max-w-[1680px] px-4 pb-6 sm:px-6">
         <p className="mx-auto max-w-3xl text-center text-[11px] leading-relaxed text-muted-foreground sm:mx-0 sm:text-left">
           {t("footer.disclaimer")}
         </p>

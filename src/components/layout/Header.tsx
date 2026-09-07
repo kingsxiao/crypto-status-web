@@ -172,7 +172,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-md">
-      <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
+      <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 2xl:max-w-[1680px] 2xl:px-10">
         <NavLink to="/" className="flex shrink-0 items-center gap-3 outline-none">
           <div className="flex size-8 items-center justify-center rounded-md border border-primary/70">
             <div className="size-2.5 rounded-full bg-primary" />

@@ -33,7 +33,7 @@ export function AboutPage() {
   const themeLabel = THEMES.find((th) => th.id === theme)?.en ?? "MONO"
 
   return (
-    <main className="mx-auto w-full max-w-5xl flex-1 space-y-4 px-4 pb-20 pt-6 sm:px-6">
+    <main className="mx-auto w-full max-w-5xl flex-1 2xl:max-w-[1280px] 2xl:px-10 space-y-4 px-4 pb-20 pt-6 sm:px-6">
       <PageHeader
         en="About"
         title={t("page.about.title")}

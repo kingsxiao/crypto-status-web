@@ -155,7 +155,7 @@ export function DashboardPage() {
 
   if (error && !snapshot) {
     return (
-      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col items-center justify-center gap-4 px-6 py-24">
+      <main className="mx-auto flex w-full max-w-7xl flex-1 2xl:max-w-[1680px] 2xl:px-10 flex-col items-center justify-center gap-4 px-6 py-24">
         <div className="flex size-14 items-center justify-center rounded-full border">
           <TriangleAlert className="size-6" />
         </div>
@@ -173,7 +173,7 @@ export function DashboardPage() {
   if (!snapshot) return null
 
   return (
-    <main className="mx-auto w-full max-w-7xl flex-1 space-y-6 px-4 pb-20 pt-6 sm:px-6">
+    <main className="mx-auto w-full max-w-7xl flex-1 2xl:max-w-[1680px] 2xl:px-10 space-y-6 px-4 pb-20 pt-6 sm:px-6">
       <PageHeader
         en="Dashboard"
         title={t("page.dashboard.title")}

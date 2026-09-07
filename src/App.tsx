@@ -40,7 +40,7 @@ function ScrollToTop() {
 /** 懒加载页面占位：与各页骨架屏风格一致（页头 + 卡片网格 + 表格剪影） */
 function RouteFallback() {
   return (
-    <main className="mx-auto w-full max-w-7xl flex-1 space-y-6 px-4 pb-20 pt-6 sm:px-6">
+    <main className="mx-auto w-full max-w-7xl flex-1 2xl:max-w-[1680px] 2xl:px-10 space-y-6 px-4 pb-20 pt-6 sm:px-6">
       <SkPageHeader title="w-36" desc="w-64" />
       <div className="grid gap-4 lg:grid-cols-12">
         <SkeletonCard className="min-h-[360px] lg:col-span-5">

@@ -60,7 +60,7 @@ function WatchCard({ items }: { items: LMsg[] }) {
 
 function VerdictSkeleton() {
   return (
-    <div className="mx-auto w-full max-w-7xl flex-1 space-y-6 px-4 pb-20 pt-6 sm:px-6">
+    <div className="mx-auto w-full max-w-7xl flex-1 2xl:max-w-[1680px] 2xl:px-10 space-y-6 px-4 pb-20 pt-6 sm:px-6">
       {/* 页头 */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <SkPageHeader title="w-36" desc="w-96" />
@@ -219,7 +219,7 @@ export function VerdictPage() {
   if (loading) return <VerdictSkeleton />
 
   return (
-    <main className="mx-auto w-full max-w-7xl flex-1 space-y-6 px-4 pb-20 pt-6 sm:px-6">
+    <main className="mx-auto w-full max-w-7xl flex-1 2xl:max-w-[1680px] 2xl:px-10 space-y-6 px-4 pb-20 pt-6 sm:px-6">
       {/* 页头 */}
       <PageHeader
         en="Verdict"

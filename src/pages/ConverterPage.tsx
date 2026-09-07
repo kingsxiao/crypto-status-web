@@ -97,7 +97,7 @@ export function ConverterPage() {
 
   if (loading && !snapshot) {
     return (
-      <main className="mx-auto w-full max-w-5xl flex-1 space-y-4 px-4 pb-20 pt-6 sm:px-6">
+      <main className="mx-auto w-full max-w-5xl flex-1 2xl:max-w-[1280px] 2xl:px-10 space-y-4 px-4 pb-20 pt-6 sm:px-6">
         <SkPageHeader title="w-40" desc="w-72" />
         <div className="grid gap-4 md:grid-cols-2">
           {[0, 1].map((i) => (
@@ -134,7 +134,7 @@ export function ConverterPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-5xl flex-1 space-y-4 px-4 pb-20 pt-6 sm:px-6">
+    <main className="mx-auto w-full max-w-5xl flex-1 2xl:max-w-[1280px] 2xl:px-10 space-y-4 px-4 pb-20 pt-6 sm:px-6">
       <PageHeader
         en="Converter"
         title={t("page.converter.title")}

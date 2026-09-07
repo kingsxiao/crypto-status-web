@@ -155,7 +155,7 @@ export function CoinDetail({ coin, live, onBack }: Props) {
 
   return (
     <TooltipProvider delayDuration={200}>
-    <main className="mx-auto w-full max-w-7xl flex-1 space-y-4 px-4 pb-20 pt-6 sm:px-6">
+    <main className="mx-auto w-full max-w-7xl flex-1 2xl:max-w-[1680px] 2xl:px-10 space-y-4 px-4 pb-20 pt-6 sm:px-6">
       <div className="flex items-center justify-between">
         <Button variant="ghost" size="sm" onClick={onBack} className="-ml-2 gap-1.5">
           <ArrowLeft className="size-4" />

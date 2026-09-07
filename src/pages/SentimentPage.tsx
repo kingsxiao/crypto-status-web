@@ -173,7 +173,7 @@ export function SentimentPage() {
 
   if (loading && !snapshot) {
     return (
-      <main className="mx-auto w-full max-w-7xl flex-1 space-y-4 px-4 pb-20 pt-6 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl flex-1 2xl:max-w-[1680px] 2xl:px-10 space-y-4 px-4 pb-20 pt-6 sm:px-6">
         <SkPageHeader title="w-40" desc="w-64" />
 
         {/* 当前指数 + 关键点位 */}
@@ -222,7 +222,7 @@ export function SentimentPage() {
 
   if (!stats) {
     return (
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 pt-10 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl flex-1 2xl:max-w-[1680px] 2xl:px-10 px-4 pt-10 sm:px-6">
         <Card>
           <CardContent className="flex h-64 flex-col items-center justify-center gap-2 text-center">
             <p className="text-sm font-semibold">{t("sentiment.unavailable")}</p>
@@ -255,7 +255,7 @@ export function SentimentPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-7xl flex-1 space-y-4 px-4 pb-20 pt-6 sm:px-6">
+    <main className="mx-auto w-full max-w-7xl flex-1 2xl:max-w-[1680px] 2xl:px-10 space-y-4 px-4 pb-20 pt-6 sm:px-6">
       <PageHeader
         en="Sentiment"
         title={t("page.sentiment.title")}
