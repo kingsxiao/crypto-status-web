@@ -185,9 +185,9 @@ export function Header() {
           </div>
         </NavLink>
 
-        {/* 桌面端导航菜单 */}
-        <nav className="hidden items-center gap-1 md:flex" aria-label={t("hdr.nav")}>
-          {NAV_ITEMS.map(({ to, key, en, icon: Icon }) => (
+        {/* 桌面端导航菜单：xl 起显示，lg~xl 区间六个菜单项放不下，交给汉堡菜单 */}
+        <nav className="hidden items-center gap-1 xl:flex" aria-label={t("hdr.nav")}>
+          {NAV_ITEMS.map(({ to, key, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
@@ -196,7 +196,7 @@ export function Header() {
               onFocus={() => prefetchRoute(to)}
               className={({ isActive }) =>
                 cn(
-                  "flex items-center gap-1.5 rounded-md px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] transition-colors",
+                  "flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] transition-colors",
                   isActive
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
@@ -205,11 +205,6 @@ export function Header() {
             >
               <Icon className="size-3.5" />
               <span>{t(key)}</span>
-              {showEnTag && (
-                <span className="hidden text-[10px] font-normal tracking-[0.2em] opacity-50 lg:inline">
-                  {en}
-                </span>
-              )}
             </NavLink>
           ))}
         </nav>
@@ -229,10 +224,10 @@ export function Header() {
             size="sm"
             onClick={refresh}
             disabled={refreshing}
-            className="gap-1.5"
+            className="size-8 gap-0 p-0"
+            aria-label={t("common.refresh")}
           >
-            <RotateCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />
-            {t("common.refresh")}
+            <RotateCw className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
           </Button>
           <ThemePicker />
           <LanguagePicker />
@@ -241,7 +236,7 @@ export function Header() {
           <Button
             variant="outline"
             size="sm"
-            className="size-8 gap-0 p-0 md:hidden"
+            className="size-8 gap-0 p-0 xl:hidden"
             aria-label={menuOpen ? t("hdr.menu.close") : t("hdr.menu.open")}
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((v) => !v)}
@@ -261,7 +256,7 @@ export function Header() {
       {/* 移动端下拉菜单 */}
       {menuOpen && (
         <nav
-          className="fade-up border-t border-border/60 bg-background/95 px-4 py-3 backdrop-blur-md md:hidden"
+          className="fade-up border-t border-border/60 bg-background/95 px-4 py-3 backdrop-blur-md xl:hidden"
           aria-label={t("hdr.mobileNav")}
         >
           <div className="mx-auto grid w-full max-w-7xl gap-1">
