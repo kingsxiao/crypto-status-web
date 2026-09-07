@@ -1,9 +1,10 @@
 /**
- * 行情表格共用单元格：实时闪动价格、涨跌幅。
+ * 行情表格共用单元格：实时闪动价格、涨跌幅、资产标识。
  */
 
 import { useEffect, useRef, useState } from "react"
 
+import type { Coin } from "@/lib/api"
 import { formatPct, formatPrice } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
@@ -41,5 +42,28 @@ export function Pct({ v }: { v: number | null | undefined }) {
     <span className={cn("tabular font-mono", v >= 0 ? "text-up" : "text-down")}>
       {formatPct(v)}
     </span>
+  )
+}
+
+/** 资产标识单元格：图标 + 名称 + 代码，行情页与总览页表格共用同一排版 */
+export function AssetCell({ coin }: { coin: Coin }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <img
+        src={coin.image}
+        alt=""
+        className="size-7 rounded-full border bg-background object-cover grayscale contrast-125"
+        loading="lazy"
+        decoding="async"
+        width={28}
+        height={28}
+      />
+      <div className="flex flex-col">
+        <span className="text-sm font-semibold leading-tight">{coin.name}</span>
+        <span className="font-mono text-[10px] uppercase leading-tight text-muted-foreground">
+          {coin.symbol}
+        </span>
+      </div>
+    </div>
   )
 }

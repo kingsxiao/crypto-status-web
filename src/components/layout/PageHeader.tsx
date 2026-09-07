@@ -31,9 +31,9 @@ export function PageHeader({ en, title, description, children, className }: Page
           {en}
           <span aria-hidden className="h-px w-6 bg-primary/40" />
         </span>
-        <h1 className="mt-1.5 text-xl font-bold tracking-wide text-balance">{title}</h1>
+        <h1 className="mt-2 text-xl font-bold leading-tight tracking-wide text-balance sm:text-2xl">{title}</h1>
         {description && (
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
+          <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{description}</p>
         )}
       </div>
       {children && <div className="flex shrink-0 flex-wrap items-center gap-2">{children}</div>}
