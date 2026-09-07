@@ -1,0 +1,226 @@
+import { useEffect, useRef, useState } from "react"
+import { NavLink } from "react-router-dom"
+import { Check, Menu, Palette, RotateCw, X } from "lucide-react"
+
+import { Button } from "@/components/ui/button"
+import { NAV_ITEMS } from "@/components/layout/nav"
+import { useMarket } from "@/context/MarketDataContext"
+import { THEMES, useTheme } from "@/hooks/useTheme"
+import { prefetchRoute } from "@/lib/routePrefetch"
+import { formatTime } from "@/lib/format"
+import { cn } from "@/lib/utils"
+import type { FeedStatus } from "@/lib/realtime"
+
+function feedText(s: FeedStatus, hasError: boolean): { dot: string; text: string } {
+  if (hasError) return { dot: "bg-down", text: "连接异常" }
+  switch (s.mode) {
+    case "live":
+      return { dot: "bg-primary", text: "实时 · WebSocket" }
+    case "polling":
+      return { dot: "bg-primary/60", text: "准实时 · 轮询" }
+    default:
+      return { dot: "bg-primary/40", text: "连接中" }
+  }
+}
+
+/** 主题色切换：三套预置配色，选择持久化到 localStorage */
+function ThemePicker() {
+  const { theme, setTheme } = useTheme()
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onPointerDown = (e: PointerEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false)
+    }
+    document.addEventListener("pointerdown", onPointerDown)
+    document.addEventListener("keydown", onKeyDown)
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown)
+      document.removeEventListener("keydown", onKeyDown)
+    }
+  }, [open])
+
+  return (
+    <div ref={rootRef} className="relative">
+      <Button
+        variant="outline"
+        size="sm"
+        className="size-8 gap-0 p-0"
+        aria-label="切换主题色"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <Palette className="size-4" />
+      </Button>
+      {open && (
+        <div
+          role="menu"
+          aria-label="主题色"
+          className="fade-up absolute right-0 top-full z-50 mt-2 w-44 rounded-lg border border-border bg-popover p-1 shadow-xl"
+        >
+          {THEMES.map((t) => {
+            const active = t.id === theme
+            return (
+              <button
+                key={t.id}
+                role="menuitemradio"
+                aria-checked={active}
+                onClick={() => {
+                  setTheme(t.id)
+                  setOpen(false)
+                }}
+                className={cn(
+                  "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors",
+                  active ? "bg-secondary" : "hover:bg-secondary/60"
+                )}
+              >
+                <span
+                  className="size-3.5 shrink-0 rounded-full border border-border"
+                  style={{ background: t.swatch }}
+                />
+                <span className="flex flex-col leading-none">
+                  <span className="text-xs font-semibold">{t.name}</span>
+                  <span className="mt-1 font-mono text-[9px] tracking-[0.2em] text-muted-foreground">
+                    {t.en}
+                  </span>
+                </span>
+                {active && <Check className="ml-auto size-3.5 shrink-0 text-primary" />}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function Header() {
+  const { error, refreshing, lastUpdated, refresh, feedStatus } = useMarket()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const feed = feedText(feedStatus, !!error)
+
+  return (
+    <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-md">
+      <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
+        <NavLink to="/" className="flex shrink-0 items-center gap-3 outline-none">
+          <div className="flex size-8 items-center justify-center rounded-md border border-primary/70">
+            <div className="size-2.5 rounded-full bg-primary" />
+          </div>
+          <div className="hidden flex-col text-left leading-none sm:flex">
+            <span className="text-sm font-bold tracking-[0.18em]">CRYPTO STATUS</span>
+            <span className="mt-1 text-[10px] tracking-widest text-muted-foreground">
+              加密货币市场状态
+            </span>
+          </div>
+        </NavLink>
+
+        {/* 桌面端导航菜单 */}
+        <nav className="hidden items-center gap-1 md:flex" aria-label="主导航">
+          {NAV_ITEMS.map(({ to, label, en, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={to === "/"}
+              onPointerEnter={() => prefetchRoute(to)}
+              onFocus={() => prefetchRoute(to)}
+              className={({ isActive }) =>
+                cn(
+                  "flex items-center gap-1.5 rounded-md px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] transition-colors",
+                  isActive
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
+                )
+              }
+            >
+              <Icon className="size-3.5" />
+              <span>{label}</span>
+              <span className="hidden text-[9px] font-normal tracking-[0.2em] opacity-50 lg:inline">
+                {en}
+              </span>
+            </NavLink>
+          ))}
+        </nav>
+
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* 连接状态 + 更新时间：合并为一个胶囊，减少顶栏视觉碎片 */}
+          <div className="hidden items-center gap-2 rounded-full border border-border/60 bg-secondary/40 py-1 pl-2.5 pr-3 sm:flex">
+            <span className={`live-dot size-1.5 rounded-full ${feed.dot}`} />
+            <span className="font-mono text-[11px] whitespace-nowrap text-muted-foreground">{feed.text}</span>
+            <span aria-hidden className="text-border">·</span>
+            <span className="tabular font-mono text-[11px] whitespace-nowrap text-muted-foreground">
+              {formatTime(lastUpdated)}
+            </span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={refresh}
+            disabled={refreshing}
+            className="gap-1.5"
+          >
+            <RotateCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />
+            刷新
+          </Button>
+          <ThemePicker />
+
+          {/* 移动端汉堡 */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="size-8 gap-0 p-0 md:hidden"
+            aria-label={menuOpen ? "关闭菜单" : "打开菜单"}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((v) => !v)}
+          >
+            {menuOpen ? <X className="size-4" /> : <Menu className="size-4" />}
+          </Button>
+        </div>
+      </div>
+
+      {/* 手动刷新时的顶部不定进度条（sticky 定位即绝对定位锚点） */}
+      {refreshing && (
+        <div className="absolute inset-x-0 bottom-0 h-[3px] overflow-hidden" aria-hidden>
+          <div className="loading-bar" />
+        </div>
+      )}
+
+      {/* 移动端下拉菜单 */}
+      {menuOpen && (
+        <nav
+          className="fade-up border-t border-border/60 bg-background/95 px-4 py-3 backdrop-blur-md md:hidden"
+          aria-label="移动端导航"
+        >
+          <div className="mx-auto grid w-full max-w-7xl gap-1">
+            {NAV_ITEMS.map(({ to, label, en, icon: Icon }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={to === "/"}
+                onClick={() => setMenuOpen(false)}
+                onPointerEnter={() => prefetchRoute(to)}
+                onFocus={() => prefetchRoute(to)}
+                className={({ isActive }) =>
+                  cn(
+                    "flex items-center gap-3 rounded-md px-3 py-2.5 transition-colors",
+                    isActive
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+                  )
+                }
+              >
+                <Icon className="size-4" />
+                <span className="text-sm font-semibold">{label}</span>
+                <span className="ml-auto font-mono text-[9px] tracking-[0.2em] opacity-50">{en}</span>
+              </NavLink>
+            ))}
+          </div>
+        </nav>
+      )}
+    </header>
+  )
+}

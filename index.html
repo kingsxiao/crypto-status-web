@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23000'/%3E%3Ccircle cx='50' cy='50' r='26' fill='none' stroke='%23fff' stroke-width='8'/%3E%3Crect x='45' y='45' width='10' height='10' fill='%23fff'/%3E%3C/svg%3E" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="加密货币市场状态仪表盘 — 实时价格、牛熊周期、多空信号与市场情绪" />
+    <meta name="theme-color" content="#171717" />
+    <title>CRYPTO STATUS · 加密货币市场状态</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- 数据源预热：行情快照 / 币种图标 / 情绪指数 / 实时推送，省去首屏请求的 DNS+TLS 建连 -->
+    <link rel="preconnect" href="https://api.coingecko.com" />
+    <link rel="preconnect" href="https://coin-images.coingecko.com" />
+    <link rel="preconnect" href="https://api.alternative.me" />
+    <link rel="preconnect" href="https://stream.binance.com" />
+    <!-- 字体 CSS 非阻塞加载（display=swap 已保证文字先用系统字体渲染），消除第三方 CSS 阻塞首绘 -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // 首帧前恢复上次选择的主题色，避免非 mono 主题刷新时闪回黑白
+      try {
+        var t = localStorage.getItem("crypto-status-theme");
+        if (t === "blue" || t === "violet" || t === "mono") {
+          document.documentElement.dataset.theme = t;
+        }
+      } catch (e) {}
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
