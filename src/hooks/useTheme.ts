@@ -4,12 +4,12 @@ import { useSyncExternalStore } from "react"
  * 三套主题（参考 shadcn/ui 官网 Themes）：每套在 index.css 中持有完整 token 集
  * （background/card/border/muted/primary/ring/chart-1~5），切换时全站联动。
  * mono 即黑白原版（默认）；blue / violet 取自 shadcn 官方色板 dark 模式原值。
- * swatch 与各主题的 --primary 保持一致。
+ * swatch 与各主题的 --primary 保持一致；nameKey 经词典按语言取词。
  */
 export const THEMES = [
-  { id: "mono", name: "石墨黑白", en: "MONO", swatch: "oklch(0.985 0 0)" },
-  { id: "blue", name: "电光蓝", en: "BLUE", swatch: "hsl(217.2 91.2% 59.8%)" },
-  { id: "violet", name: "暗夜紫", en: "VIOLET", swatch: "hsl(263.4 70% 50.4%)" },
+  { id: "mono", nameKey: "theme.mono", en: "MONO", swatch: "oklch(0.985 0 0)" },
+  { id: "blue", nameKey: "theme.blue", en: "BLUE", swatch: "hsl(217.2 91.2% 59.8%)" },
+  { id: "violet", nameKey: "theme.violet", en: "VIOLET", swatch: "hsl(263.4 70% 50.4%)" },
 ] as const
 
 export type ThemeId = (typeof THEMES)[number]["id"]

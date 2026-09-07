@@ -4,6 +4,9 @@
  * 八项指标各自给出 [-2, +2] 分与一句话观点，加权归一为 [-100, +100] 综合分，
  * 输出 看多/偏多/中性/偏空/看空 结论与多空计数。
  * 与 indicators.ts 的 analyze() 共用评分函数，保证口径一致。
+ *
+ * 文案一律输出 message key + 参数（LMsg），由渲染层按当前语言翻译；
+ * 引擎本身不依赖 locale，结果可安全缓存与持久化。
  */
 
 import {
@@ -19,25 +22,47 @@ import {
   scoreTrend,
   type IndicatorResult,
 } from "./indicators"
+import type { MessageKey } from "@/i18n"
 
 export type VerdictLevel = "strong-long" | "long" | "neutral" | "short" | "strong-short"
+
+/** 综合分五档 → 文案 key（SignalCard / OpinionBoard / SentimentPage 共用） */
+export const VERDICT_LEVEL_KEY: Record<VerdictLevel, MessageKey> = {
+  "strong-long": "verdictLevel.strongLong",
+  long: "verdictLevel.long",
+  neutral: "verdictLevel.neutral",
+  short: "verdictLevel.short",
+  "strong-short": "verdictLevel.strongShort",
+}
+
+/** 单指标判定五档（看多/偏多/中性/偏空/看空） */
+export type ScoreLevel = "long" | "leanLong" | "neutral" | "leanShort" | "short"
+
+export const SCORE_LEVEL_KEY: Record<ScoreLevel, MessageKey> = {
+  long: "scoreLevel.long",
+  leanLong: "scoreLevel.leanLong",
+  neutral: "scoreLevel.neutral",
+  leanShort: "scoreLevel.leanShort",
+  short: "scoreLevel.short",
+}
 
 export interface CoinAnalysis {
   indicators: IndicatorResult[]
   /** [-100, +100] */
   composite: number
-  verdict: { label: string; level: VerdictLevel }
+  verdict: { level: VerdictLevel }
   counts: { bull: number; bear: number; neutral: number }
-  /** 数据不足等原因导致的部分指标缺失说明，null = 完整 */
-  note: string | null
+  /** 数据不足等原因导致的部分指标缺失说明（key 列表），null = 完整 */
+  note: { missing: MessageKey[] } | null
 }
 
-const VERDICT_LABELS: Record<VerdictLevel, string> = {
-  "strong-long": "强烈看多",
-  long: "看多",
-  neutral: "中性观望",
-  short: "看空",
-  "strong-short": "强烈看空",
+/** 单指标得分 → 判定档位（文案由渲染层经 SCORE_LEVEL_KEY 翻译） */
+export function verdictOfScore(score: number): { level: ScoreLevel; tone: "bull" | "bear" | "neutral" } {
+  if (score >= 1.2) return { level: "long", tone: "bull" }
+  if (score >= 0.25) return { level: "leanLong", tone: "bull" }
+  if (score > -0.25) return { level: "neutral", tone: "neutral" }
+  if (score > -1.2) return { level: "leanShort", tone: "bear" }
+  return { level: "short", tone: "bear" }
 }
 
 export function verdictOfComposite(composite: number): CoinAnalysis["verdict"] {
@@ -47,16 +72,7 @@ export function verdictOfComposite(composite: number): CoinAnalysis["verdict"] {
     : composite > -15 ? "neutral"
     : composite > -40 ? "short"
     : "strong-short"
-  return { label: VERDICT_LABELS[level], level }
-}
-
-/** 单指标得分 → 判定文案 */
-export function verdictOfScore(score: number): { text: string; tone: "bull" | "bear" | "neutral" } {
-  if (score >= 1.2) return { text: "看多", tone: "bull" }
-  if (score >= 0.25) return { text: "偏多", tone: "bull" }
-  if (score > -0.25) return { text: "中性", tone: "neutral" }
-  if (score > -1.2) return { text: "偏空", tone: "bear" }
-  return { text: "看空", tone: "bear" }
+  return { level }
 }
 
 /** BOLL(20,2) 通道内位置 → 分数：上轨外超买逆势减分，下轨外超卖逆势加分 */
@@ -71,12 +87,15 @@ function scoreBollPosition(price: number, mid: number, band: number) {
   return { score, pos }
 }
 
+/** 量价配合形态（key 同时用于 display 与 verdict 取词） */
+type VolTag = "surgeUp" | "surgeDown" | "shrinkUp" | "shrinkDown" | "mildUp" | "mildDown"
+
 /** 量价配合：近5日均量相对20日均量 × 近5日涨跌方向 */
-function scoreVolumePrice(chg5: number, volRatio: number) {
+function scoreVolumePrice(chg5: number, volRatio: number): { score: number; tag: VolTag } {
   const rising = chg5 >= 0
-  if (volRatio >= 1.15) return { score: rising ? 1.5 : -1.5, tag: rising ? "放量上涨" : "放量下跌" }
-  if (volRatio <= 0.85) return { score: rising ? 0.5 : -0.5, tag: rising ? "缩量上涨" : "缩量下跌" }
-  return { score: rising ? 1 : -1, tag: rising ? "温和放量上涨" : "温和缩量下跌" }
+  if (volRatio >= 1.15) return { score: rising ? 1.5 : -1.5, tag: rising ? "surgeUp" : "surgeDown" }
+  if (volRatio <= 0.85) return { score: rising ? 0.5 : -0.5, tag: rising ? "shrinkUp" : "shrinkDown" }
+  return { score: rising ? 1 : -1, tag: rising ? "mildUp" : "mildDown" }
 }
 
 /**
@@ -120,16 +139,11 @@ export function analyzeCoin(
     const vp = scoreVolumePrice(chg5, avg20 > 0 ? avg5 / avg20 : 1)
     volInd = {
       key: "volume",
-      name: "量价配合（5/20日）",
-      display: `${vp.tag} · 量比 ${(avg5 / (avg20 || 1)).toFixed(2)}`,
+      name: { key: "ind.volume.name" },
+      display: { key: `ind.volume.display.${vp.tag}`, params: { ratio: (avg5 / (avg20 || 1)).toFixed(2) } },
       score: vp.score,
       weight: 10,
-      verdict:
-        vp.tag === "放量上涨" ? "成交量放大且价格上涨，多头进攻得到量能确认"
-        : vp.tag === "放量下跌" ? "成交量放大且价格下跌，抛压沉重需警惕"
-        : vp.tag === "缩量上涨" ? "价格上涨但量能萎缩，上行动力存疑"
-        : vp.tag === "缩量下跌" ? "价格下跌但量能萎缩，抛压趋于衰竭"
-        : chg5 >= 0 ? "量价温和配合，走势平稳偏多" : "量价温和回落，走势平稳偏空",
+      verdict: { key: `ind.volume.v.${vp.tag}` },
       kind: "momentum",
     }
   }
@@ -139,24 +153,24 @@ export function analyzeCoin(
   const drawdown = ((price - yearHigh) / yearHigh) * 100
 
   const indicators: IndicatorResult[] = []
-  const missing: string[] = []
+  const missing: MessageKey[] = []
 
   /* 1. 价格 vs MA200 */
   if (ma200) {
     const t = scoreTrend(price, ma200)
     indicators.push({
       key: "trend",
-      name: "价格 vs 200日均线",
+      name: { key: "ind.trend.name" },
       display: `${t.pct >= 0 ? "+" : ""}${t.pct.toFixed(1)}%`,
       score: t.score,
       weight: 22,
       verdict:
         t.pct >= 0
-          ? `价格高于 200 日均线 ${Math.abs(t.pct).toFixed(1)}%，长期趋势偏多`
-          : `价格低于 200 日均线 ${Math.abs(t.pct).toFixed(1)}%，长期趋势承压`,
+          ? { key: "ind.trend.vAbove", params: { pct: Math.abs(t.pct).toFixed(1) } }
+          : { key: "ind.trend.vBelow", params: { pct: Math.abs(t.pct).toFixed(1) } },
       kind: "trend",
     })
-  } else missing.push("MA200（数据不足 200 日）")
+  } else missing.push("coin.miss.ma200")
 
   /* 2. 均线交叉 */
   if (ma50 && ma200) {
@@ -164,32 +178,34 @@ export function analyzeCoin(
     const golden = ma50 > ma200
     indicators.push({
       key: "cross",
-      name: "均线交叉（50/200）",
-      display: golden ? "金叉形态" : "死叉形态",
+      name: { key: "ind.cross.name" },
+      display: { key: golden ? "ind.cross.golden" : "ind.cross.dead" },
       score: c.score,
       weight: 14,
       verdict: golden
-        ? `50 日均线高于 200 日均线 ${Math.abs(c.pct).toFixed(1)}%，金叉结构维持`
-        : `50 日均线低于 200 日均线 ${Math.abs(c.pct).toFixed(1)}%，死叉结构维持`,
+        ? { key: "ind.cross.vGolden", params: { pct: Math.abs(c.pct).toFixed(1) } }
+        : { key: "ind.cross.vDead", params: { pct: Math.abs(c.pct).toFixed(1) } },
       kind: "trend",
     })
-  } else missing.push("均线交叉（数据不足）")
+  } else missing.push("coin.miss.cross")
 
   /* 3. RSI */
   if (rsi14 !== null) {
     indicators.push({
       key: "rsi",
-      name: "RSI（14日）",
+      name: { key: "ind.rsi.name" },
       display: rsi14.toFixed(1),
       score: scoreRsi(rsi14),
       weight: 16,
-      verdict:
-        rsi14 >= 75 ? "已进入超买区，短期回调风险上升（逆势减分）"
-        : rsi14 >= 60 ? "多头动能强劲，处于强势区间"
-        : rsi14 >= 50 ? "动能略偏多头"
-        : rsi14 >= 45 ? "动能中性"
-        : rsi14 >= 25 ? "空头动能占优，走势偏弱"
-        : "已进入超卖区，存在超跌反弹机会（逆势加分）",
+      verdict: {
+        key:
+          rsi14 >= 75 ? "ind.rsi.v1"
+          : rsi14 >= 60 ? "ind.rsi.v2"
+          : rsi14 >= 50 ? "ind.rsi.v3"
+          : rsi14 >= 45 ? "ind.rsi.v4"
+          : rsi14 >= 25 ? "ind.rsi.v5"
+          : "ind.rsi.v6",
+      },
       kind: "momentum",
     })
   }
@@ -198,31 +214,28 @@ export function analyzeCoin(
   if (m) {
     indicators.push({
       key: "macd",
-      name: "MACD（12/26/9）",
+      name: { key: "ind.macd.name" },
       display: `${m.hist >= 0 ? "+" : ""}${((m.hist / price) * 100).toFixed(2)}%`,
       score: scoreMacd({ ...m, price }),
       weight: 16,
-      verdict:
-        m.hist > 0
-          ? m.hist > m.prevHist
-            ? "MACD 红柱放大，多头动能在增强"
-            : "MACD 红柱收敛，多头动能减弱"
-          : m.hist < m.prevHist
-            ? "MACD 绿柱放大，空头动能在增强"
-            : "MACD 绿柱收敛，空头动能减弱",
+      verdict: {
+        key:
+          m.hist > 0
+            ? m.hist > m.prevHist ? "ind.macd.vExpandUp" : "ind.macd.vFadeUp"
+            : m.hist < m.prevHist ? "ind.macd.vExpandDown" : "ind.macd.vFadeDown",
+      },
       kind: "momentum",
     })
-  } else missing.push("MACD（数据不足 35 日）")
+  } else missing.push("coin.miss.macd")
 
   /* 5. 动量 */
   indicators.push({
     key: "momentum",
-    name: "价格动量（7/30日）",
+    name: { key: "ind.momentum.name" },
     display: `7D ${chg7 >= 0 ? "+" : ""}${chg7.toFixed(1)}% · 30D ${chg30 >= 0 ? "+" : ""}${chg30.toFixed(1)}%`,
     score: scoreMomentum(chg7, chg30),
     weight: 12,
-    verdict:
-      chg30 >= 0 ? "近一月收涨，中期资金流入迹象" : "近一月收跌，中期资金流出迹象",
+    verdict: { key: chg30 >= 0 ? "ind.momentum.vUp" : "ind.momentum.vDown" },
     kind: "momentum",
   })
 
@@ -232,17 +245,25 @@ export function analyzeCoin(
     const b = scoreBollPosition(price, bollMid, band)
     indicators.push({
       key: "boll",
-      name: "布林带位置（20,2）",
-      display:
-        b.pos > 1 ? "上轨上方" : b.pos > 0.35 ? "中轨上方" : b.pos > -0.35 ? "中轨附近" : b.pos > -1 ? "中轨下方" : "下轨下方",
+      name: { key: "ind.boll.name" },
+      display: {
+        key:
+          b.pos > 1 ? "ind.boll.display.aboveUpper"
+          : b.pos > 0.35 ? "ind.boll.display.upperMid"
+          : b.pos > -0.35 ? "ind.boll.display.mid"
+          : b.pos > -1 ? "ind.boll.display.lowerMid"
+          : "ind.boll.display.belowLower",
+      },
       score: b.score,
       weight: 10,
-      verdict:
-        b.pos > 1 ? "价格突破布林上轨，短期过热（逆势减分）"
-        : b.pos > 0.35 ? "价格运行于布林中上轨之间，短线偏强"
-        : b.pos > -0.35 ? "价格贴近布林中轨，方向待选择"
-        : b.pos > -1 ? "价格运行于布林中下轨之间，短线偏弱"
-        : "价格跌破布林下轨，短期超跌（逆势加分）",
+      verdict: {
+        key:
+          b.pos > 1 ? "ind.boll.v1"
+          : b.pos > 0.35 ? "ind.boll.v2"
+          : b.pos > -0.35 ? "ind.boll.v3"
+          : b.pos > -1 ? "ind.boll.v4"
+          : "ind.boll.v5",
+      },
       kind: "momentum",
     })
   }
@@ -253,15 +274,17 @@ export function analyzeCoin(
   /* 8. 距一年高点 */
   indicators.push({
     key: "ath",
-    name: "距一年高点位置",
+    name: { key: "ind.athYear.name" },
     display: `${drawdown.toFixed(1)}%`,
     score: scoreAthPosition(drawdown),
     weight: 10,
-    verdict:
-      drawdown >= -5 ? "逼近一年高点，处于强势周期"
-      : drawdown >= -30 ? "距一年高点回撤温和，处于高位震荡区"
-      : drawdown >= -55 ? "回撤较深，市场信心受损"
-      : "深度回撤，处于周期底部区域",
+    verdict: {
+      key:
+        drawdown >= -5 ? "ind.athYear.v1"
+        : drawdown >= -30 ? "ind.athYear.v2"
+        : drawdown >= -55 ? "ind.athYear.v3"
+        : "ind.athYear.v4",
+    },
     kind: "position",
   })
 
@@ -281,7 +304,7 @@ export function analyzeCoin(
     composite,
     verdict: verdictOfComposite(composite),
     counts,
-    note: missing.length ? `部分指标因数据不足未计入：${missing.join("、")}` : null,
+    note: missing.length ? { missing } : null,
   }
 }
 

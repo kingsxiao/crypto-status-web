@@ -11,13 +11,13 @@ import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
-  CardTitle,
+  CardKicker,
 } from "@/components/ui/card"
 import { LoadingDots, SkeletonCard, SkHeader, SkPageHeader, SkProgress, TableSkeleton } from "@/components/loading"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useMarket } from "@/context/MarketDataContext"
+import { t, tm, useT, type LMsg } from "@/i18n"
 import { usePageMeta } from "@/hooks/usePageMeta"
 import {
   computeVerdict,
@@ -30,31 +30,28 @@ import {
 } from "@/lib/crossAsset"
 
 /** 今日关注：由极值读数规则生成的观察清单（复刻 OpenClue outlook 板块） */
-function WatchCard({ items }: { items: string[] }) {
+function WatchCard({ items }: { items: LMsg[] }) {
   return (
     <Card className="h-full border-border/80">
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-            今日关注
-          </CardTitle>
-          <Eye className="size-4 text-muted-foreground" />
-        </div>
-        <CardDescription className="text-xs">
-          由当前极值读数触发的观察清单，次日复盘验证
-        </CardDescription>
+        <CardKicker
+          icon={Eye}
+          title={t("vp.watchTitle")}
+          en="WATCHLIST"
+          desc={t("vp.watchDesc")}
+        />
       </CardHeader>
-      <CardContent className="flex h-[calc(100%-6.5rem)] flex-col gap-2.5">
+      <CardContent className="flex flex-1 flex-col gap-2.5">
         <div className="flex-1 space-y-2.5">
           {items.map((w) => (
-            <div key={w} className="flex gap-2.5 text-xs leading-relaxed">
+            <div key={w.key} className="flex gap-2.5 text-xs leading-relaxed">
               <span className="mt-1.5 size-1.5 shrink-0 rounded-full border border-primary" />
-              <span className="text-muted-foreground">{w}</span>
+              <span className="text-muted-foreground">{tm(w)}</span>
             </div>
           ))}
         </div>
         <p className="mt-auto border-t border-border/60 pt-2.5 text-[10px] leading-relaxed text-muted-foreground/70">
-          复盘机制：每日立场自动存档，次日以总市值 ±0.5% 实际走向验证方向，命中与错误计入历史命中率。
+          {t("vp.reviewNote")}
         </p>
       </CardContent>
     </Card>
@@ -168,7 +165,8 @@ function VerdictSkeleton() {
 }
 
 export function VerdictPage() {
-  usePageMeta({ title: "跨资产判断 · CRYPTO STATUS" })
+  useT()
+  usePageMeta({ title: t("meta.verdict") })
   const { snapshot, loading, refresh } = useMarket()
 
   const [cross, setCross] = useState<CrossAssetData | null>(null)
@@ -212,9 +210,9 @@ export function VerdictPage() {
   const missing = useMemo(() => {
     if (!cross) return []
     const m: string[] = []
-    if (!cross.stablecoin) m.push("稳定币市值（Defillama）")
-    if (!cross.derivatives) m.push("资金费率 / 多空比（Binance）")
-    if (!cross.breadth) m.push("7d 动量与广度（CoinGecko top50）")
+    if (!cross.stablecoin) m.push(t("vp.missing.stablecoin"))
+    if (!cross.derivatives) m.push(t("vp.missing.derivatives"))
+    if (!cross.breadth) m.push(t("vp.missing.breadth"))
     return m
   }, [cross])
 
@@ -225,12 +223,12 @@ export function VerdictPage() {
       {/* 页头 */}
       <PageHeader
         en="Verdict"
-        title="跨资产判断"
-        description="每日风险偏好判定 · 方法论参考 openclue.net：跨资产指标阈值化 → 加权立场 → 次日复盘打分"
+        title={t("page.verdict.title")}
+        description={t("page.verdict.desc")}
       >
         {crossError && (
           <span className="flex items-center gap-1.5 font-mono text-[11px] text-down">
-            <TriangleAlert className="size-3.5" /> 附加数据源部分失败
+            <TriangleAlert className="size-3.5" /> {t("vp.crossError")}
           </span>
         )}
         <Button
@@ -242,7 +240,7 @@ export function VerdictPage() {
           }}
           className="gap-1.5"
         >
-          <RotateCw className="size-3.5" /> 刷新
+          <RotateCw className="size-3.5" /> {t("common.refresh")}
         </Button>
       </PageHeader>
 
@@ -278,15 +276,8 @@ export function VerdictPage() {
 
           {/* 数据源与口径说明 */}
           <footer className="fade-up space-y-1 pb-4 text-[11px] leading-relaxed text-muted-foreground">
-            <p>
-              数据源：CoinGecko（总市值 / BTC 占比 / top50 动量）· Defillama（稳定币市值）·
-              Binance fapi（资金费率 / 多空账户比）· alternative.me（恐惧贪婪）。
-            </p>
-            <p>
-              OpenClue 另覆盖 ETF 资金流与 VIX/股指宏观，因缺少浏览器端免费可达数据源（FRED /
-              Stooq / Yahoo 均不可达），本页以链上资金与衍生品结构指标替代。
-              判断与复盘仅供参考，不构成投资建议。
-            </p>
+            <p>{t("vp.sources1")}</p>
+            <p>{t("vp.sources2")}</p>
           </footer>
         </>
       ) : (
@@ -294,7 +285,7 @@ export function VerdictPage() {
         <Card className="fade-up">
           <CardContent className="flex h-72 flex-col items-center justify-center gap-3">
             <LoadingDots className="scale-125" />
-            <p className="text-xs text-muted-foreground">跨资产数据加载中 · 稳定币市值 / 资金费率 / 市场广度</p>
+            <p className="text-xs text-muted-foreground">{t("vp.loadingCross")}</p>
           </CardContent>
         </Card>
       )}

@@ -2,11 +2,15 @@ import { memo } from "react"
 import { Globe2, Layers, TrendingUp, Volume2 } from "lucide-react"
 
 import { Card, CardContent } from "@/components/ui/card"
+import { IconChip } from "@/components/ui/icon-chip"
+import { t, useT } from "@/i18n"
 import type { GlobalData } from "@/lib/api"
 import { formatPct, formatUsdCompact } from "@/lib/format"
+import { cn } from "@/lib/utils"
 
 /** 全球市场概览条（CoinGecko 限流时降级为提示条） */
 export const MarketOverview = memo(function MarketOverview({ global }: { global: GlobalData }) {
+  useT()
   const available = global.total_market_cap_usd > 0
 
   if (!available) {
@@ -14,7 +18,7 @@ export const MarketOverview = memo(function MarketOverview({ global }: { global:
       <Card className="py-0">
         <CardContent className="flex items-center justify-center gap-2 px-5 py-5 text-xs text-muted-foreground">
           <Globe2 className="size-4 shrink-0" strokeWidth={2} />
-          全球市场概况暂不可用（数据源限流），实时行情与信号不受影响
+          {t("mo.unavailable")}
         </CardContent>
       </Card>
     )
@@ -23,44 +27,47 @@ export const MarketOverview = memo(function MarketOverview({ global }: { global:
   const items = [
     {
       icon: Globe2,
-      label: "加密总市值",
+      label: t("mo.mcap"),
       value: formatUsdCompact(global.total_market_cap_usd),
       sub: `24H ${formatPct(global.market_cap_change_24h_pct)}`,
       subUp: global.market_cap_change_24h_pct >= 0,
     },
     {
       icon: Volume2,
-      label: "24H 总成交额",
+      label: t("mo.vol"),
       value: formatUsdCompact(global.total_volume_usd),
-      sub: `${global.active_cryptocurrencies.toLocaleString()} 个活跃标的`,
+      sub: t("mo.active", { n: global.active_cryptocurrencies.toLocaleString() }),
     },
     {
       icon: Layers,
-      label: "BTC 占比",
+      label: t("mo.dom"),
       value: `${global.btc_dominance.toFixed(1)}%`,
       sub: `ETH ${global.eth_dominance.toFixed(1)}%`,
     },
     {
       icon: TrendingUp,
-      label: "市值 24H 变化",
+      label: t("mo.chg"),
       value: formatPct(global.market_cap_change_24h_pct),
-      sub: global.market_cap_change_24h_pct >= 0 ? "资金净流入" : "资金净流出",
+      sub: global.market_cap_change_24h_pct >= 0 ? t("mo.inflow") : t("mo.outflow"),
       subUp: global.market_cap_change_24h_pct >= 0,
     },
   ]
 
   return (
     <Card className="py-0">
-      <CardContent className="grid grid-cols-2 divide-x md:grid-cols-4 md:py-0">
+      <CardContent className="grid grid-cols-2 md:grid-cols-4 md:divide-x md:divide-border/60 md:py-0">
         {items.map((it, i) => (
           <div
             key={it.label}
-            className={`flex flex-col gap-1.5 px-5 py-5 ${i >= 2 ? "border-t md:border-t-0" : ""} ${
-              i === 2 ? "border-t-0" : ""
-            }`}
+            className={cn(
+              "flex flex-col gap-2 px-5 py-5",
+              // 移动端 2×2 手动补分隔线（md 起由 divide-x 接管）
+              i % 2 === 1 && "border-l border-border/60 md:border-l-0",
+              i >= 2 && "border-t border-border/60 md:border-t-0",
+            )}
           >
-            <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
-              <it.icon className="size-3.5" strokeWidth={2} />
+            <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+              <IconChip><it.icon strokeWidth={2} /></IconChip>
               {it.label}
             </div>
             <div className="font-mono text-xl font-bold tabular">{it.value}</div>

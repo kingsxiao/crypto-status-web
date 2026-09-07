@@ -1,7 +1,8 @@
 /**
- * 恐惧贪婪指数（FNG）共用展示口径：分类中文映射、区间配色与情绪条渐变。
+ * 恐惧贪婪指数（FNG）共用展示口径：分类映射、区间配色与情绪条渐变。
  * SentimentCard（总览）与 SentimentPage 共用，避免两处漂移。
  */
+import { t, type MessageKey } from "@/i18n"
 
 export const FNG_ZH: Record<string, string> = {
   "Extreme Fear": "极度恐惧",
@@ -13,6 +14,20 @@ export const FNG_ZH: Record<string, string> = {
 
 export function fngZh(classification: string): string {
   return FNG_ZH[classification] ?? classification
+}
+
+/** API 分类 → 文案 key（fngLabel 按当前语言取词；未知分类回退原文） */
+const FNG_CLASS_KEY: Record<string, MessageKey> = {
+  "Extreme Fear": "fng.extremeFear",
+  Fear: "fng.fear",
+  Neutral: "fng.neutral",
+  Greed: "fng.greed",
+  "Extreme Greed": "fng.extremeGreed",
+}
+
+export function fngLabel(classification: string): string {
+  const key = FNG_CLASS_KEY[classification]
+  return key ? t(key) : classification
 }
 
 /** 恐惧(0)红 → 中性黄 → 贪婪(100)绿 的区间配色（功能色，不随主题变） */

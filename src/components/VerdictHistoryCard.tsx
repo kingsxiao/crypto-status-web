@@ -1,36 +1,32 @@
 import { memo } from "react"
-import { Check, Minus, X } from "lucide-react"
+import { Check, History, Minus, X } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardKicker } from "@/components/ui/card"
+import { stanceStyle } from "@/components/stance-style"
+import { t, useT, type MessageKey } from "@/i18n"
 import {
   gradeRecord,
   gradeStats,
+  headlineText,
   type Grade,
   type VerdictRecord,
 } from "@/lib/crossAsset"
-import { stanceStyle } from "@/components/stance-style"
 import { cn } from "@/lib/utils"
 
-const gradeMeta: Record<Exclude<Grade, "pending">, { label: string; cls: string; Icon: typeof Check }> = {
+const gradeMeta: Record<Exclude<Grade, "pending">, { label: MessageKey; cls: string; Icon: typeof Check }> = {
   correct: {
-    label: "方向正确",
+    label: "grade.correct",
     cls: "border-up text-up",
     Icon: Check,
   },
   wrong: {
-    label: "方向错误",
+    label: "grade.wrong",
     cls: "border-down text-down",
     Icon: X,
   },
   partial: {
-    label: "部分验证",
+    label: "grade.partial",
     cls: "text-muted-foreground",
     Icon: Minus,
   },
@@ -44,40 +40,40 @@ export const VerdictHistoryCard = memo(function VerdictHistoryCard({
 }: {
   history: VerdictRecord[]
 }) {
+  useT()
   const stats = gradeStats(history)
   const rows = [...history].reverse().slice(0, 14)
 
   return (
     <Card className="h-full border-border/80">
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-            判断历史 · 复盘
-          </CardTitle>
-          <Badge variant="outline" className="font-mono text-[10px] tracking-wider text-muted-foreground">
-            VERDICT HISTORY
-          </Badge>
-        </div>
-        <CardDescription className="text-xs">
-          每日立场自动记录；次日以总市值 ±0.5% 实际走向验证方向
-          {stats.hitRate != null && (
+        <CardKicker
+          icon={History}
+          title={t("vh.title")}
+          en="VERDICT HISTORY"
+          desc={
             <>
-              {" "}· 方向命中{" "}
-              <span className="font-mono font-semibold text-foreground">
-                {(stats.hitRate * 100).toFixed(0)}%
-              </span>{" "}
-              <span className="font-mono text-[10px]">
-                ({stats.correct}✓ / {stats.wrong}✗ / {stats.partial}◐)
-              </span>
+              {t("vh.desc")}
+              {stats.hitRate != null && (
+                <>
+                  {" "}· {t("vh.hit")}{" "}
+                  <span className="font-mono font-semibold text-foreground">
+                    {(stats.hitRate * 100).toFixed(0)}%
+                  </span>{" "}
+                  <span className="font-mono text-[10px]">
+                    ({stats.correct}✓ / {stats.wrong}✗ / {stats.partial}◐)
+                  </span>
+                </>
+              )}
             </>
-          )}
-        </CardDescription>
+          }
+        />
       </CardHeader>
 
       <CardContent>
         {rows.length === 0 ? (
           <p className="py-8 text-center text-xs text-muted-foreground">
-            今日判断已记录，明天自动生成首条复盘
+            {t("vh.empty")}
           </p>
         ) : (
           <ul className="space-y-1">
@@ -101,17 +97,17 @@ export const VerdictHistoryCard = memo(function VerdictHistoryCard({
                     variant="outline"
                     className={cn("shrink-0 text-[10px] font-semibold", style.cls)}
                   >
-                    {style.text}
+                    {style.text()}
                   </Badge>
                   <span className="hidden min-w-0 flex-1 truncate text-[11px] text-muted-foreground sm:block">
-                    {r.headline}
+                    {headlineText(r.headline)}
                   </span>
                   <span
                     className={cn(
                       "ml-auto shrink-0 font-mono text-xs tabular font-semibold",
                       r.mcapChg24h > 0 ? "text-up" : r.mcapChg24h < 0 ? "text-down" : "text-muted-foreground",
                     )}
-                    title="当日总市值 24h 变化"
+                    title={t("vh.mcapTitle")}
                   >
                     {r.mcapChg24h > 0 ? "+" : ""}
                     {r.mcapChg24h.toFixed(1)}%
@@ -119,11 +115,11 @@ export const VerdictHistoryCard = memo(function VerdictHistoryCard({
                   {meta ? (
                     <Badge variant="outline" className={cn("shrink-0 gap-1 text-[10px]", meta.cls)}>
                       <meta.Icon className="size-3" />
-                      {meta.label}
+                      {t(meta.label)}
                     </Badge>
                   ) : (
                     <Badge variant="outline" className="shrink-0 text-[10px] text-muted-foreground">
-                      {isLatest ? "待验证" : "—"}
+                      {isLatest ? t("vh.pending") : "—"}
                     </Badge>
                   )}
                 </li>

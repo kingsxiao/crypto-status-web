@@ -1,6 +1,7 @@
 import { memo, useMemo } from "react"
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHead, CardHeader } from "@/components/ui/card"
+import { dateLocale, t, useLocale, useT } from "@/i18n"
 import type { Analysis } from "@/lib/indicators"
 import type { MarketChart as ChartData } from "@/lib/api"
 import { formatPrice } from "@/lib/format"
@@ -13,6 +14,8 @@ export const BtcChartCard = memo(function BtcChartCard({
   chart: ChartData
   analysis: Analysis | null
 }) {
+  useT()
+  const { locale } = useLocale()
   const W = 1000
   const H = 240
   const PAD_T = 16
@@ -54,22 +57,24 @@ export const BtcChartCard = memo(function BtcChartCard({
     })
     if (seg) maSegs.push(seg)
 
-    // 月份刻度
-    const ticks: { x: number; label: string }[] = []
+    // 月份刻度（label 随语言在渲染期生成）
+    const ticks: { x: number; ts: number }[] = []
     let lastMonth = -1
-    pts.forEach(([t], i) => {
-      const d = new Date(t)
+    pts.forEach(([ts], i) => {
+      const d = new Date(ts)
       if (d.getMonth() !== lastMonth && i > 0) {
         lastMonth = d.getMonth()
-        ticks.push({
-          x: x(i),
-          label: `${d.getMonth() + 1}月`,
-        })
+        ticks.push({ x: x(i), ts })
       }
     })
 
     return { priceLine, area, maSegs, ticks, min, max, x, y, closes }
   }, [chart])
+
+  const tickFmt = useMemo(
+    () => new Intl.DateTimeFormat(dateLocale(locale), { month: "short" }),
+    [locale],
+  )
 
   const lastClose = model ? model.closes[model.closes.length - 1] : null
   const ma200Now = analysis?.btc.ma200 ?? null
@@ -77,18 +82,15 @@ export const BtcChartCard = memo(function BtcChartCard({
   return (
     <Card>
       <CardHeader>
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <CardTitle className="text-base">BTC 一年走势与 200 日均线</CardTitle>
-            <CardDescription className="mt-1 text-xs">
-              实线为价格，虚线为 200 日均线 —— 价格在线上方即为牛市结构
-            </CardDescription>
-          </div>
+        <CardHead
+          title={t("btc.title")}
+          desc={t("btc.desc")}
+        >
           <div className="flex items-center gap-5 font-mono text-xs">
             <div className="flex items-center gap-2">
               <span className="inline-block h-0.5 w-5 bg-primary" />
               <span className="text-muted-foreground">
-                价格 <span className="font-semibold text-foreground">${lastClose ? formatPrice(lastClose) : "—"}</span>
+                {t("btc.price")} <span className="font-semibold text-foreground">${lastClose ? formatPrice(lastClose) : "—"}</span>
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -98,7 +100,7 @@ export const BtcChartCard = memo(function BtcChartCard({
               </span>
             </div>
           </div>
-        </div>
+        </CardHead>
       </CardHeader>
 
       <CardContent>
@@ -108,7 +110,7 @@ export const BtcChartCard = memo(function BtcChartCard({
             className="h-[240px] w-full"
             preserveAspectRatio="none"
             role="img"
-            aria-label="BTC 一年价格走势与 200 日均线"
+            aria-label={t("btc.aria")}
           >
             <defs>
               <linearGradient id="btcfill" x1="0" y1="0" x2="0" y2="1">
@@ -160,10 +162,10 @@ export const BtcChartCard = memo(function BtcChartCard({
             />
 
             {/* 月份刻度 */}
-            {model.ticks.map((t, i) => (
+            {model.ticks.map((tk, i) => (
               <text
                 key={i}
-                x={t.x}
+                x={tk.x}
                 y={H - 6}
                 fontSize="11"
                 fill="currentColor"
@@ -171,7 +173,7 @@ export const BtcChartCard = memo(function BtcChartCard({
                 textAnchor="middle"
                 fontFamily="JetBrains Mono, monospace"
               >
-                {t.label}
+                {tickFmt.format(tk.ts)}
               </text>
             ))}
             <text x={PAD_L} y={PAD_T + 4} fontSize="11" fill="currentColor" fillOpacity="0.5" fontFamily="JetBrains Mono, monospace">
@@ -183,7 +185,7 @@ export const BtcChartCard = memo(function BtcChartCard({
           </svg>
         ) : (
           <div className="flex h-[240px] items-center justify-center text-xs text-muted-foreground">
-            历史数据暂不可用
+            {t("btc.unavailable")}
           </div>
         )}
       </CardContent>

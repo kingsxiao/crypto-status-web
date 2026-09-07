@@ -1,3 +1,4 @@
+import { t, useT } from "@/i18n"
 import { cn } from "@/lib/utils"
 
 /**
@@ -13,6 +14,7 @@ export function SignalGauge({
   size?: number
   className?: string
 }) {
+  useT()
   const clamped = Math.max(-100, Math.min(100, score))
   const cx = 130
   const cy = 120
@@ -40,7 +42,7 @@ export function SignalGauge({
       height={(size * 168) / 260}
       className={className}
       role="img"
-      aria-label={`综合信号 ${score}`}
+      aria-label={t("gauge.aria", { score })}
     >
       {/* 分段弧：红 → 橙红 → 灰 → 浅绿 → 绿（语义热力色，不随主题变；中性段与刻度用主题 token） */}
       <path d={arc(-100, -60)} stroke="oklch(0.62 0.21 27)" strokeWidth="10" fill="none" strokeLinecap="round" />
@@ -65,9 +67,9 @@ export function SignalGauge({
       <circle cx={cx} cy={cy} r="10" fill="none" stroke="currentColor" strokeOpacity="0.3" strokeWidth="1" />
 
       {/* 端点标签 */}
-      <text x={cx - r + 4} y={cy + 30} textAnchor="middle" fontSize="11" fill="oklch(0.68 0.18 27)" fontWeight="600">看空</text>
-      <text x={cx} y={cy - r - 26} textAnchor="middle" fontSize="11" fill="var(--muted-foreground)" fontWeight="600">中性</text>
-      <text x={cx + r - 4} y={cy + 30} textAnchor="middle" fontSize="11" fill="oklch(0.8 0.16 152)" fontWeight="600">看多</text>
+      <text x={cx - r + 4} y={cy + 30} textAnchor="middle" fontSize="11" fill="oklch(0.68 0.18 27)" fontWeight="600">{t("gauge.bear")}</text>
+      <text x={cx} y={cy - r - 26} textAnchor="middle" fontSize="11" fill="var(--muted-foreground)" fontWeight="600">{t("gauge.neutral")}</text>
+      <text x={cx + r - 4} y={cy + 30} textAnchor="middle" fontSize="11" fill="oklch(0.8 0.16 152)" fontWeight="600">{t("gauge.bull")}</text>
     </svg>
   )
 }

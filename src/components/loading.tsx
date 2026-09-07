@@ -10,6 +10,7 @@ import type { CSSProperties } from "react"
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { t } from "@/i18n"
 import { cn } from "@/lib/utils"
 
 /** 骨架卡片外壳:与真实 Card 同款边框/圆角,children 搭内部结构 */
@@ -29,12 +30,15 @@ export function SkeletonCard({
   )
 }
 
-/** 卡片头骨架:小标题条 + 右侧角标条(对应真实卡片的标题 + EN 徽标) */
+/** 卡片头骨架:图标芯片 + 标题条 + 右侧角标条(对应 CardKicker 的三层结构) */
 export function SkHeader({ title = "w-24" }: { title?: string }) {
   return (
     <div className="flex items-center justify-between">
-      <Skeleton className={cn("h-3 rounded-full", title)} />
-      <Skeleton className="h-2.5 w-14 rounded-full bg-secondary/60" />
+      <div className="flex items-center gap-2.5">
+        <Skeleton className="size-7 shrink-0 rounded-md bg-secondary/60" />
+        <Skeleton className={cn("h-3 rounded-full", title)} />
+      </div>
+      <Skeleton className="h-2.5 w-14 shrink-0 rounded-full bg-secondary/60" />
     </div>
   )
 }
@@ -152,21 +156,24 @@ export function TableSkeleton({ rows = 10, showSparkline = false }: { rows?: num
   )
 }
 
-/** 统计条骨架:MarketOverview 的 2x2 / 1x4 分格条 */
+/** 统计条骨架:MarketOverview 的 2x2 / 1x4 分格条(分隔线逻辑与真实组件一致) */
 export function StatStripSkeleton({ className }: { className?: string }) {
   return (
     <Card className={cn("py-0", className)}>
-      <CardContent className="grid grid-cols-2 divide-x md:grid-cols-4 md:py-0">
+      <CardContent className="grid grid-cols-2 md:grid-cols-4 md:divide-x md:divide-border/60 md:py-0">
         {Array.from({ length: 4 }).map((_, i) => (
           <div
             key={i}
             className={cn(
               "flex flex-col gap-2 px-5 py-5",
-              i >= 2 && "border-t md:border-t-0",
-              i === 2 && "border-t-0"
+              i % 2 === 1 && "border-l border-border/60 md:border-l-0",
+              i >= 2 && "border-t border-border/60 md:border-t-0"
             )}
           >
-            <Skeleton className="h-2 w-14 rounded-full bg-secondary/50" />
+            <div className="flex items-center gap-2">
+              <Skeleton className="size-7 shrink-0 rounded-md bg-secondary/60" />
+              <Skeleton className="h-2 w-14 rounded-full bg-secondary/50" />
+            </div>
             <Skeleton className="h-5 w-20 rounded-md" />
             <Skeleton className="h-2 w-16 rounded-full bg-secondary/50" />
           </div>
@@ -189,7 +196,7 @@ export function SkSectionLabel() {
 /** 轻量加载指示:三点波浪,用于局部/过渡态(全页用骨架屏) */
 export function LoadingDots({ className }: { className?: string }) {
   return (
-    <span className={cn("flex items-center gap-1.5", className)} role="status" aria-label="加载中">
+    <span className={cn("flex items-center gap-1.5", className)} role="status" aria-label={t("common.loading")}>
       {[0, 1, 2].map((i) => (
         <span
           key={i}

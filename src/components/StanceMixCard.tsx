@@ -1,13 +1,8 @@
 import { memo } from "react"
+import { ChartPie } from "lucide-react"
 
-import { Badge } from "@/components/ui/badge"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardKicker } from "@/components/ui/card"
+import { t, tm, useT, type MessageKey } from "@/i18n"
 import type { CrossIndicator, Verdict } from "@/lib/crossAsset"
 import { cn } from "@/lib/utils"
 
@@ -25,11 +20,12 @@ const dotCls: Record<"bull" | "neutral" | "bear", string> = {
 
 /** 立场分布（stance-mix）：全部指标按看多/中性/看空三档归类的占比条 */
 export const StanceMixCard = memo(function StanceMixCard({ verdict }: { verdict: Verdict }) {
+  useT()
   const total = verdict.indicators.length
-  const groups: { key: "bull" | "neutral" | "bear"; label: string }[] = [
-    { key: "bull", label: "看多" },
-    { key: "neutral", label: "中性" },
-    { key: "bear", label: "看空" },
+  const groups: { key: "bull" | "neutral" | "bear"; label: MessageKey }[] = [
+    { key: "bull", label: "sm.bull" },
+    { key: "neutral", label: "sm.neutral" },
+    { key: "bear", label: "sm.bear" },
   ]
   const barCls: Record<"bull" | "neutral" | "bear", string> = {
     bull: "bg-up",
@@ -43,17 +39,12 @@ export const StanceMixCard = memo(function StanceMixCard({ verdict }: { verdict:
   return (
     <Card className="h-full border-border/80">
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-            立场分布
-          </CardTitle>
-          <Badge variant="outline" className="font-mono text-[10px] tracking-wider text-muted-foreground">
-            STANCE MIX
-          </Badge>
-        </div>
-        <CardDescription className="text-xs">
-          {total} 项跨资产指标按信号方向归类，反映当前多空偏向的结构
-        </CardDescription>
+        <CardKicker
+          icon={ChartPie}
+          title={t("sm.title")}
+          en="STANCE MIX"
+          desc={t("sm.desc", { n: total })}
+        />
       </CardHeader>
 
       <CardContent className="space-y-4">
@@ -68,7 +59,7 @@ export const StanceMixCard = memo(function StanceMixCard({ verdict }: { verdict:
                   key={g.key}
                   className={cn("h-full transition-all", barCls[g.key])}
                   style={{ width: `${(n / total) * 100}%` }}
-                  title={`${g.label} ${n} 项`}
+                  title={t("sm.chipTitle", { label: t(g.label), n })}
                 />
               )
             })}
@@ -78,7 +69,7 @@ export const StanceMixCard = memo(function StanceMixCard({ verdict }: { verdict:
               <span key={g.key} className="flex items-center gap-1.5">
                 <span className={cn("size-2 rounded-full", dotCls[g.key])} />
                 <span className="font-mono font-semibold">{verdict.mix[g.key]}</span>
-                <span className="text-muted-foreground">项{g.label}</span>
+                <span className="text-muted-foreground">{t(g.label)}</span>
               </span>
             ))}
           </div>
@@ -92,17 +83,17 @@ export const StanceMixCard = memo(function StanceMixCard({ verdict }: { verdict:
             return (
               <div key={g.key} className="space-y-1.5">
                 <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.25em] text-muted-foreground">
-                  {g.label} · {items.length}
+                  {t(g.label)} · {items.length}
                 </span>
                 <div className="flex flex-wrap gap-1.5">
                   {items.map((i) => (
                     <span
                       key={i.key}
                       className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-secondary/40 px-2 py-1 text-[11px] font-medium"
-                      title={`${i.display} — ${i.verdict}`}
+                      title={`${tm(i.display)} — ${tm(i.verdict)}`}
                     >
                       <span className={cn("size-1.5 rounded-full", dotCls[g.key])} />
-                      {i.name}
+                      {tm(i.name)}
                     </span>
                   ))}
                 </div>

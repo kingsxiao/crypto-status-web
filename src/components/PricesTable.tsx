@@ -1,7 +1,7 @@
 import { memo, useState } from "react"
 import { ChevronRight } from "lucide-react"
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHead, CardHeader } from "@/components/ui/card"
 import {
   Table,
   TableBody,
@@ -11,8 +11,9 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Segmented } from "@/components/ui/segmented"
-import { LivePrice, Pct } from "@/components/price-cells"
+import { AssetCell, LivePrice, Pct } from "@/components/price-cells"
 import { Sparkline } from "@/components/Sparkline"
+import { t, useT } from "@/i18n"
 import { STABLECOIN_IDS, type Coin } from "@/lib/api"
 import type { LiveTicker } from "@/lib/realtime"
 import { formatPct, formatPrice, formatUsdCompact } from "@/lib/format"
@@ -29,29 +30,24 @@ export const PricesTable = memo(function PricesTable({
   live: Record<string, LiveTicker>
   onSelect: (coin: Coin) => void
 }) {
+  useT()
   const [scope, setScope] = useState<"all" | "tradeable">("all")
   const list = scope === "tradeable" ? coins.filter((c) => !STABLECOIN_IDS.has(c.id)) : coins
 
   return (
     <Card>
       <CardHeader>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <CardTitle className="text-base">实时价格</CardTitle>
-            <CardDescription className="mt-1 text-xs">
-              按市值排名 · 点击行查看K线与指标分析
-            </CardDescription>
-          </div>
+        <CardHead title={t("pt.title")} desc={t("pt.desc")}>
           <Segmented
-            label="行情范围"
+            label={t("common.scopeLabel")}
             value={scope}
             onChange={(v) => setScope(v)}
             items={[
-              { value: "all", label: "全部" },
-              { value: "tradeable", label: "剔除稳定币" },
+              { value: "all", label: t("common.scope.all") },
+              { value: "tradeable", label: t("common.scope.tradeable") },
             ]}
           />
-        </div>
+        </CardHead>
       </CardHeader>
 
       <CardContent>
@@ -59,25 +55,25 @@ export const PricesTable = memo(function PricesTable({
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <TableHead className="w-10 text-center">#</TableHead>
-              <TableHead>资产</TableHead>
-              <TableHead className="text-right">价格 (USD)</TableHead>
+              <TableHead>{t("common.col.asset")}</TableHead>
+              <TableHead className="text-right">{t("common.col.price")}</TableHead>
               <TableHead className="text-right">1H</TableHead>
               <TableHead className="text-right">24H</TableHead>
               <TableHead className="text-right">7D</TableHead>
               <TableHead className="text-right">30D</TableHead>
-              <TableHead className="hidden text-right lg:table-cell">市值</TableHead>
-              <TableHead className="hidden text-right xl:table-cell">距ATH</TableHead>
-              <TableHead className="hidden w-[132px] md:table-cell">7日走势</TableHead>
+              <TableHead className="hidden text-right lg:table-cell">{t("common.col.mcap")}</TableHead>
+              <TableHead className="hidden text-right xl:table-cell">{t("common.col.ath")}</TableHead>
+              <TableHead className="hidden w-[132px] md:table-cell">{t("common.col.trend7")}</TableHead>
               <TableHead className="w-6">
-                <span className="sr-only">详情</span>
+                <span className="sr-only">{t("common.col.detailSr")}</span>
               </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {list.map((c) => {
-              const t = live[c.id]
-              const price = t?.price ?? c.current_price
-              const chg24 = t?.changePct ?? c.price_change_percentage_24h_in_currency
+              const tk = live[c.id]
+              const price = tk?.price ?? c.current_price
+              const chg24 = tk?.changePct ?? c.price_change_percentage_24h_in_currency
               const hasDetail = !!TRADE_SYMBOLS[c.id]
               const spark = c.sparkline_in_7d?.price ?? []
               const chg7 = c.price_change_percentage_7d_in_currency ?? 0
@@ -103,26 +99,10 @@ export const PricesTable = memo(function PricesTable({
                     {c.market_cap_rank}
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-2.5">
-                      <img
-                        src={c.image}
-                        alt=""
-                        className="size-7 rounded-full border bg-background object-cover grayscale contrast-125"
-                        loading="lazy"
-                        decoding="async"
-                        width={28}
-                        height={28}
-                      />
-                      <div className="flex flex-col">
-                        <span className="text-sm font-semibold leading-tight">{c.name}</span>
-                        <span className="font-mono text-[10px] uppercase leading-tight text-muted-foreground">
-                          {c.symbol}
-                        </span>
-                      </div>
-                    </div>
+                    <AssetCell coin={c} />
                   </TableCell>
                   <TableCell className="text-right">
-                    {t ? <LivePrice price={price} /> : <span className="font-mono font-semibold tabular">${formatPrice(price)}</span>}
+                    {tk ? <LivePrice price={price} /> : <span className="font-mono font-semibold tabular">${formatPrice(price)}</span>}
                   </TableCell>
                   <TableCell className="text-right text-xs">
                     <Pct v={c.price_change_percentage_1h_in_currency} />
@@ -152,7 +132,7 @@ export const PricesTable = memo(function PricesTable({
                     </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground/70">
-                    {hasDetail ? <ChevronRight className="size-3.5" /> : <span className="block text-center font-mono text-[9px] text-muted-foreground">稳定币</span>}
+                    {hasDetail ? <ChevronRight className="size-3.5" /> : <span className="block text-center font-mono text-[10px] text-muted-foreground">{t("common.stablecoin")}</span>}
                   </TableCell>
                 </TableRow>
               )

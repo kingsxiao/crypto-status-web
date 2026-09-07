@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ArrowLeft, CandlestickChart, LineChart } from "lucide-react"
+import { ArrowDownRight, ArrowLeft, ArrowUpRight, CandlestickChart, LineChart } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { CandleChart } from "@/components/CandleChart"
 import { OpinionBoard } from "@/components/OpinionBoard"
+import { t, useT } from "@/i18n"
 import type { Coin } from "@/lib/api"
 import { analyzeCoin } from "@/lib/coinAnalysis"
 import { formatPrice, formatUsdCompact } from "@/lib/format"
@@ -56,6 +57,7 @@ function Toggle({
 }
 
 export function CoinDetail({ coin, live, onBack }: Props) {
+  useT()
   const [intervalKey, setIntervalKey] = useState("1d")
   const [range, setRange] = useState<100 | 250 | 500>(250)
   const [overlays, setOverlays] = useState({ ma: true, boll: false })
@@ -80,9 +82,9 @@ export function CoinDetail({ coin, live, onBack }: Props) {
       const res = await fetchCandles(coin.id, symbols, intervalKey)
       setCandles(res.candles)
       setRenderMode(res.renderMode)
-      setSource(res.source === "coingecko-line" ? "快照" : "实时")
+      setSource(res.source === "coingecko-line" ? t("coin.source.snapshot") : t("coin.source.live"))
     } catch (e) {
-      setError(e instanceof Error ? e.message : "K线加载失败")
+      setError(e instanceof Error ? e.message : t("coin.loadFailFallback"))
     } finally {
       setLoading(false)
     }
@@ -157,12 +159,12 @@ export function CoinDetail({ coin, live, onBack }: Props) {
       <div className="flex items-center justify-between">
         <Button variant="ghost" size="sm" onClick={onBack} className="-ml-2 gap-1.5">
           <ArrowLeft className="size-4" />
-          返回行情
+          {t("coin.back")}
         </Button>
         {source && (
           <Badge variant="outline" className="gap-1.5 font-mono text-[10px] text-muted-foreground">
             <span className="live-dot size-1.5 rounded-full bg-primary" />
-            K线 · {source}
+            {t("coin.badge", { source })}
           </Badge>
         )}
       </div>
@@ -187,21 +189,31 @@ export function CoinDetail({ coin, live, onBack }: Props) {
               </div>
               <div className="mt-1 flex items-baseline gap-3">
                 <span className="font-mono text-3xl font-bold tabular leading-none">${formatPrice(livePrice)}</span>
-                <span className={cn("font-mono text-sm tabular", liveChange >= 0 ? "text-up" : "text-down")}>
-                  {liveChange >= 0 ? "▲" : "▼"} {Math.abs(liveChange).toFixed(2)}%
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-0.5 font-mono text-sm tabular",
+                    liveChange >= 0 ? "text-up" : "text-down"
+                  )}
+                >
+                  {liveChange >= 0 ? (
+                    <ArrowUpRight className="size-4" strokeWidth={2.5} />
+                  ) : (
+                    <ArrowDownRight className="size-4" strokeWidth={2.5} />
+                  )}
+                  {Math.abs(liveChange).toFixed(2)}%
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-x-8 gap-y-2 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-4 sm:divide-x sm:divide-border/60">
             {[
-              { label: "24H 最高", value: live?.high ?? coin.high_24h },
-              { label: "24H 最低", value: live?.low ?? coin.low_24h },
-              { label: "24H 成交额", value: live?.quoteVolume ?? coin.total_volume, compact: true },
-              { label: "市值", value: coin.market_cap, compact: true },
+              { label: t("coin.stat.high24"), value: live?.high ?? coin.high_24h },
+              { label: t("coin.stat.low24"), value: live?.low ?? coin.low_24h },
+              { label: t("coin.stat.vol24"), value: live?.quoteVolume ?? coin.total_volume, compact: true },
+              { label: t("coin.stat.mcap"), value: coin.market_cap, compact: true },
             ].map((s) => (
-              <div key={s.label} className="flex flex-col gap-0.5">
+              <div key={s.label} className="flex flex-col gap-1 sm:px-5 sm:first:pl-0 sm:last:pr-0">
                 <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{s.label}</span>
                 <span className="font-mono text-sm font-semibold tabular">
                   {s.compact ? formatUsdCompact(s.value) : s.value ? `$${formatPrice(s.value)}` : "—"}
@@ -216,23 +228,23 @@ export function CoinDetail({ coin, live, onBack }: Props) {
       <Card className="fade-up py-4">
         <CardContent className="flex flex-wrap items-center gap-x-5 gap-y-3 px-5">
           <Segmented
-            label="K线周期"
+            label={t("coin.intervalLabel")}
             value={intervalKey}
             onChange={setIntervalKey}
             items={[
-              { value: "1h", label: <span className="font-mono">1时</span> },
-              { value: "4h", label: <span className="font-mono">4时</span> },
-              { value: "1d", label: <span className="font-mono">日线</span> },
-              { value: "1w", label: <span className="font-mono">周线</span> },
+              { value: "1h", label: <span className="font-mono">{t("coin.interval.1h")}</span> },
+              { value: "4h", label: <span className="font-mono">{t("coin.interval.4h")}</span> },
+              { value: "1d", label: <span className="font-mono">{t("coin.interval.1d")}</span> },
+              { value: "1w", label: <span className="font-mono">{t("coin.interval.1w")}</span> },
             ]}
           />
 
           <Separator orientation="vertical" className="!h-6" />
 
           <div className="flex items-center gap-1.5">
-            <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">范围</span>
+            <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">{t("coin.rangeLabel")}</span>
             {([100, 250, 500] as const).map((r) => (
-              <Toggle key={r} active={range === r} onClick={() => setRange(r)} hint={`显示最近 ${r} 根K线`}>
+              <Toggle key={r} active={range === r} onClick={() => setRange(r)} hint={t("coin.rangeHint", { n: r })}>
                 {r}
               </Toggle>
             ))}
@@ -241,11 +253,11 @@ export function CoinDetail({ coin, live, onBack }: Props) {
           <Separator orientation="vertical" className="!h-6" />
 
           <div className="flex items-center gap-1.5">
-            <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">叠加</span>
-            <Toggle active={overlays.ma} onClick={() => setOverlays((o) => ({ ...o, ma: !o.ma }))} hint="MA 均线（7/25/99）">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">{t("coin.overlayLabel")}</span>
+            <Toggle active={overlays.ma} onClick={() => setOverlays((o) => ({ ...o, ma: !o.ma }))} hint={t("coin.overlay.maHint")}>
               MA
             </Toggle>
-            <Toggle active={overlays.boll} onClick={() => setOverlays((o) => ({ ...o, boll: !o.boll }))} hint="布林带 BOLL(20,2)">
+            <Toggle active={overlays.boll} onClick={() => setOverlays((o) => ({ ...o, boll: !o.boll }))} hint={t("coin.overlay.bollHint")}>
               BOLL
             </Toggle>
           </div>
@@ -253,21 +265,21 @@ export function CoinDetail({ coin, live, onBack }: Props) {
           <Separator orientation="vertical" className="!h-6" />
 
           <div className="flex items-center gap-1.5">
-            <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">副图</span>
-            <Toggle active={panes.rsi} onClick={() => setPanes((p) => ({ ...p, rsi: !p.rsi }))} hint="相对强弱指数 RSI(14)">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">{t("coin.paneLabel")}</span>
+            <Toggle active={panes.rsi} onClick={() => setPanes((p) => ({ ...p, rsi: !p.rsi }))} hint={t("coin.pane.rsiHint")}>
               RSI
             </Toggle>
-            <Toggle active={panes.macd} onClick={() => setPanes((p) => ({ ...p, macd: !p.macd }))} hint="指数平滑异同移动平均线 MACD(12,26,9)">
+            <Toggle active={panes.macd} onClick={() => setPanes((p) => ({ ...p, macd: !p.macd }))} hint={t("coin.pane.macdHint")}>
               MACD
             </Toggle>
-            <Toggle active={panes.kdj} onClick={() => setPanes((p) => ({ ...p, kdj: !p.kdj }))} hint="随机指标 KDJ(9,3,3)">
+            <Toggle active={panes.kdj} onClick={() => setPanes((p) => ({ ...p, kdj: !p.kdj }))} hint={t("coin.pane.kdjHint")}>
               KDJ
             </Toggle>
           </div>
 
           <div className="ml-auto flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
             {renderMode === "line" ? <LineChart className="size-3.5" /> : <CandlestickChart className="size-3.5" />}
-            {renderMode === "line" ? "折线模式（兜底数据源）" : "蜡烛图模式"}
+            {renderMode === "line" ? t("coin.render.line") : t("coin.render.candle")}
           </div>
         </CardContent>
       </Card>
@@ -277,9 +289,9 @@ export function CoinDetail({ coin, live, onBack }: Props) {
         <CardContent className="pt-6">
           {error ? (
             <div className="flex h-80 flex-col items-center justify-center gap-3">
-              <p className="text-sm font-semibold">K线数据加载失败</p>
+              <p className="text-sm font-semibold">{t("coin.loadFail")}</p>
               <p className="font-mono text-xs text-muted-foreground">{error}</p>
-              <Button variant="outline" size="sm" onClick={load}>重试</Button>
+              <Button variant="outline" size="sm" onClick={load}>{t("common.retry")}</Button>
             </div>
           ) : !visible || loading ? (
             <div className="space-y-4">
@@ -305,15 +317,15 @@ export function CoinDetail({ coin, live, onBack }: Props) {
       {opinion ? (
         <OpinionBoard
           analysis={opinion}
-          title={`${coin.name} 多空观点`}
-          description="基于日线八项指标加权合成，实时价参与计算 · 左空右多"
-          badge={`${opinion.indicators.length} 项指标 · 日线`}
+          title={t("coin.opinionTitle", { name: coin.name })}
+          description={t("coin.opinionDesc")}
+          badge={t("coin.opinionBadge", { n: opinion.indicators.length })}
         />
       ) : (
         <Card className="fade-up">
           <CardContent className="flex h-32 flex-col items-center justify-center gap-2 text-center">
-            <p className="text-sm font-semibold">多空观点数据不足</p>
-            <p className="text-xs text-muted-foreground">需要至少 60 天日线数据，部分新上市币种可能无法计算</p>
+            <p className="text-sm font-semibold">{t("coin.opinionInsufficient")}</p>
+            <p className="text-xs text-muted-foreground">{t("coin.opinionInsufficientDesc")}</p>
           </CardContent>
         </Card>
       )}

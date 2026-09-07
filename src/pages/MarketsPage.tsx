@@ -2,7 +2,7 @@ import { useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronRight, Search, Star } from "lucide-react"
 
-import { LivePrice, Pct } from "@/components/price-cells"
+import { AssetCell, LivePrice, Pct } from "@/components/price-cells"
 import { Sparkline } from "@/components/Sparkline"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { TableSkeleton } from "@/components/loading"
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Segmented } from "@/components/ui/segmented"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useLive, useMarket } from "@/context/MarketDataContext"
+import { t, useT } from "@/i18n"
 import { useFavorites } from "@/hooks/useFavorites"
 import { usePageMeta } from "@/hooks/usePageMeta"
 import { STABLECOIN_IDS, type Coin } from "@/lib/api"
@@ -90,7 +91,7 @@ function SortHead({
 function WatchStar({ active, onToggle }: { active: boolean; onToggle: () => void }) {
   return (
     <button
-      aria-label={active ? "移除自选" : "加入自选"}
+      aria-label={active ? t("markets.removeFav") : t("markets.addFav")}
       onClick={(e) => {
         e.stopPropagation()
         onToggle()
@@ -106,7 +107,8 @@ function WatchStar({ active, onToggle }: { active: boolean; onToggle: () => void
 }
 
 export function MarketsPage() {
-  usePageMeta({ title: "行情 · CRYPTO STATUS" })
+  useT()
+  usePageMeta({ title: t("meta.markets") })
   const { snapshot, loading } = useMarket()
   const tickers = useLive()
   const navigate = useNavigate()
@@ -158,19 +160,19 @@ export function MarketsPage() {
       {/* 页头：搜索 + 范围筛选 */}
       <PageHeader
         en="Markets"
-        title="行情"
+        title={t("nav.markets")}
         description={
           breadth ? (
             <>
-              24H 上涨 <span className="font-mono text-up">{breadth.up}</span> · 下跌{" "}
-              <span className="font-mono text-down">{breadth.down}</span> · 平均{" "}
+              24H {t("markets.up")} <span className="font-mono text-up">{breadth.up}</span> · {t("markets.down")}{" "}
+              <span className="font-mono text-down">{breadth.down}</span> · {t("markets.avg")}{" "}
               <span className={cn("font-mono", breadth.avg >= 0 ? "text-up" : "text-down")}>
                 {breadth.avg >= 0 ? "+" : ""}
                 {breadth.avg.toFixed(2)}%
               </span>
             </>
           ) : (
-            "全市场主流资产实时报价"
+            t("page.markets.desc")
           )
         }
       >
@@ -179,18 +181,18 @@ export function MarketsPage() {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索币种 / 代码"
+            placeholder={t("markets.search")}
             className="h-8 w-44 pl-8 font-mono text-xs"
           />
         </div>
         <Segmented
-          label="行情范围"
+          label={t("common.scopeLabel")}
           value={scope}
           onChange={(v) => setScope(v)}
           items={[
-            { value: "all", label: "全部" },
-            { value: "tradeable", label: "剔除稳定币" },
-            { value: "favorites", label: "自选" },
+            { value: "all", label: t("common.scope.all") },
+            { value: "tradeable", label: t("common.scope.tradeable") },
+            { value: "favorites", label: t("common.scope.favorites") },
           ]}
         />
       </PageHeader>
@@ -209,17 +211,17 @@ export function MarketsPage() {
             <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
               <p className="text-sm font-semibold">
                 {coins.length === 0
-                  ? "行情数据暂不可用"
+                  ? t("markets.empty.unavailable")
                   : scope === "favorites"
-                    ? "自选列表为空"
-                    : "没有匹配的币种"}
+                    ? t("markets.empty.fav")
+                    : t("markets.empty.noMatch")}
               </p>
               <p className="max-w-xs text-xs text-muted-foreground">
                 {coins.length === 0
-                  ? "数据源暂时无法访问，正在自动重试，也可点击右上角刷新"
+                  ? t("markets.empty.unavailableDesc")
                   : scope === "favorites"
-                    ? "点击表格中的星标将币种加入自选，数据保存在本地浏览器"
-                    : "试试其他关键词，或清空搜索条件"}
+                    ? t("markets.empty.favDesc")
+                    : t("markets.empty.noMatchDesc")}
               </p>
             </div>
           ) : (
@@ -227,29 +229,29 @@ export function MarketsPage() {
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-8">
-                    <span className="sr-only">自选</span>
+                    <span className="sr-only">{t("common.col.favSr")}</span>
                   </TableHead>
                   <SortHead label="#" sortKey="rank" active={sortKey === "rank"} dir={sortDir} onSort={onSort} className="w-14 text-center" />
-                  <TableHead>资产</TableHead>
-                  <SortHead label="价格 USD" sortKey="price" active={sortKey === "price"} dir={sortDir} onSort={onSort} className="text-right" />
+                  <TableHead>{t("common.col.asset")}</TableHead>
+                  <SortHead label={t("common.col.price")} sortKey="price" active={sortKey === "price"} dir={sortDir} onSort={onSort} className="text-right" />
                   <SortHead label="1H" sortKey="chg1h" active={sortKey === "chg1h"} dir={sortDir} onSort={onSort} className="text-right" />
                   <SortHead label="24H" sortKey="chg24h" active={sortKey === "chg24h"} dir={sortDir} onSort={onSort} className="text-right" />
                   <SortHead label="7D" sortKey="chg7d" active={sortKey === "chg7d"} dir={sortDir} onSort={onSort} className="text-right" />
                   <SortHead label="30D" sortKey="chg30d" active={sortKey === "chg30d"} dir={sortDir} onSort={onSort} className="hidden text-right sm:table-cell" />
-                  <SortHead label="市值" sortKey="marketCap" active={sortKey === "marketCap"} dir={sortDir} onSort={onSort} className="hidden text-right md:table-cell" />
-                  <SortHead label="24H额" sortKey="volume" active={sortKey === "volume"} dir={sortDir} onSort={onSort} className="hidden text-right lg:table-cell" />
-                  <SortHead label="距ATH" sortKey="ath" active={sortKey === "ath"} dir={sortDir} onSort={onSort} className="hidden text-right xl:table-cell" />
-                  <TableHead className="hidden w-[132px] md:table-cell">7日走势</TableHead>
+                  <SortHead label={t("common.col.mcap")} sortKey="marketCap" active={sortKey === "marketCap"} dir={sortDir} onSort={onSort} className="hidden text-right md:table-cell" />
+                  <SortHead label={t("common.col.vol24h")} sortKey="volume" active={sortKey === "volume"} dir={sortDir} onSort={onSort} className="hidden text-right lg:table-cell" />
+                  <SortHead label={t("common.col.ath")} sortKey="ath" active={sortKey === "ath"} dir={sortDir} onSort={onSort} className="hidden text-right xl:table-cell" />
+                  <TableHead className="hidden w-[132px] md:table-cell">{t("common.col.trend7")}</TableHead>
                   <TableHead className="w-6">
-                    <span className="sr-only">详情</span>
+                    <span className="sr-only">{t("common.col.detailSr")}</span>
                   </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((c) => {
-                  const t = tickers[c.id]
-                  const price = t?.price ?? c.current_price
-                  const chg24 = t?.changePct ?? c.price_change_percentage_24h_in_currency
+                  const tk = tickers[c.id]
+                  const price = tk?.price ?? c.current_price
+                  const chg24 = tk?.changePct ?? c.price_change_percentage_24h_in_currency
                   const hasDetail = !!TRADE_SYMBOLS[c.id]
                   const spark = c.sparkline_in_7d?.price ?? []
                   const chg7 = c.price_change_percentage_7d_in_currency ?? 0
@@ -278,26 +280,10 @@ export function MarketsPage() {
                         {c.market_cap_rank}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2.5">
-                          <img
-                            src={c.image}
-                            alt=""
-                            className="size-7 rounded-full border bg-background object-cover grayscale contrast-125"
-                            loading="lazy"
-                            decoding="async"
-                            width={28}
-                            height={28}
-                          />
-                          <div className="flex flex-col">
-                            <span className="text-sm font-semibold leading-tight">{c.name}</span>
-                            <span className="font-mono text-[10px] leading-tight text-muted-foreground uppercase">
-                              {c.symbol}
-                            </span>
-                          </div>
-                        </div>
+                        <AssetCell coin={c} />
                       </TableCell>
                       <TableCell className="text-right">
-                        {t ? <LivePrice price={price} /> : <span className="font-mono font-semibold tabular">${formatPrice(price)}</span>}
+                        {tk ? <LivePrice price={price} /> : <span className="font-mono font-semibold tabular">${formatPrice(price)}</span>}
                       </TableCell>
                       <TableCell className="text-right text-xs">
                         <Pct v={c.price_change_percentage_1h_in_currency} />
@@ -330,7 +316,7 @@ export function MarketsPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground/70">
-                        {hasDetail ? <ChevronRight className="size-3.5" /> : <span className="block text-center font-mono text-[9px] text-muted-foreground">稳定币</span>}
+                        {hasDetail ? <ChevronRight className="size-3.5" /> : <span className="block text-center font-mono text-[10px] text-muted-foreground">{t("common.stablecoin")}</span>}
                       </TableCell>
                     </TableRow>
                   )

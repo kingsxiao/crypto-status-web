@@ -6,15 +6,21 @@ import { Button } from "@/components/ui/button"
 import { ChartSkeleton, SkeletonCard, SkHeader } from "@/components/loading"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useLive, useMarket } from "@/context/MarketDataContext"
+import { t, useT } from "@/i18n"
 import { usePageMeta } from "@/hooks/usePageMeta"
 
 export function CoinPage() {
+  useT()
   const { id = "" } = useParams()
   const { snapshot, loading } = useMarket()
   const tickers = useLive()
   const navigate = useNavigate()
   const coin = snapshot?.coins.find((c) => c.id === id) ?? null
-  usePageMeta({ title: coin ? `${coin.name} (${coin.symbol.toUpperCase()}) · CRYPTO STATUS` : "币种详情 · CRYPTO STATUS" })
+  usePageMeta({
+    title: coin
+      ? `${coin.name} (${coin.symbol.toUpperCase()}) · CRYPTO STATUS`
+      : t("meta.coin"),
+  })
 
   if (loading && !snapshot) {
     return (
@@ -80,11 +86,11 @@ export function CoinPage() {
           <TriangleAlert className="size-6" />
         </div>
         <div className="text-center">
-          <p className="font-semibold">未找到该币种</p>
+          <p className="font-semibold">{t("coin.notFound")}</p>
           <p className="mt-1 font-mono text-xs text-muted-foreground">id: {id}</p>
         </div>
         <Button asChild variant="outline" size="sm">
-          <Link to="/markets">返回行情列表</Link>
+          <Link to="/markets">{t("coin.backToList")}</Link>
         </Button>
       </main>
     )

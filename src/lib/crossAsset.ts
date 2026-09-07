@@ -18,6 +18,7 @@
  * 相应以链上资金与衍生品结构为主。
  */
 
+import { t, tm, type LMsg, type MessageKey } from "@/i18n"
 import { fetchJSON } from "@/lib/http"
 import type { Coin, FearGreedEntry, GlobalData } from "./api"
 
@@ -171,31 +172,61 @@ export type Stance =
   | "cautiously_risk_off"
   | "risk_off"
 
-export const STANCE_LABEL: Record<Stance, string> = {
-  risk_on: "风险偏好开",
-  cautiously_risk_on: "谨慎 risk-on",
-  neutral: "中性",
-  cautiously_risk_off: "谨慎 risk-off",
-  risk_off: "风险偏好关",
+/** 五档立场 → 文案 key（stance-style / VerdictCard / 历史卡共用） */
+export const STANCE_KEY: Record<Stance, MessageKey> = {
+  risk_on: "cross.stance.riskOn",
+  cautiously_risk_on: "cross.stance.cautiouslyRiskOn",
+  neutral: "cross.stance.neutral",
+  cautiously_risk_off: "cross.stance.cautiouslyRiskOff",
+  risk_off: "cross.stance.riskOff",
+}
+
+/** 指标域（渲染层经 DOMAIN_KEY 翻译） */
+export type Domain = "sentiment" | "funds" | "derivatives" | "structure"
+
+export const DOMAIN_KEY: Record<Domain, MessageKey> = {
+  sentiment: "cross.domain.sentiment",
+  funds: "cross.domain.funds",
+  derivatives: "cross.domain.derivatives",
+  structure: "cross.domain.structure",
 }
 
 export type Faction = "bull" | "neutral" | "bear"
 
 export interface CrossIndicator {
   key: string
-  name: string
-  /** 指标域：情绪 / 资金 / 衍生品 / 结构 */
-  domain: string
-  /** 当前读数（展示用） */
-  display: string
+  /** 指标名（可翻译消息） */
+  name: LMsg
+  /** 指标域 */
+  domain: Domain
+  /** 当前读数（展示用）：纯数字串直接展示，含词汇时为可翻译消息 */
+  display: string | LMsg
   /** 信号分 [-1, +1]，负数看空 */
   score: number
   weight: number
-  /** 一句话结论 */
-  verdict: string
-  /** 阈值依据 */
-  rationale: string
+  /** 一句话结论（可翻译消息） */
+  verdict: LMsg
+  /** 阈值依据（可翻译消息） */
+  rationale: LMsg
 }
+
+/** 规则化标题：结构化存储（不含翻译文本），渲染层经 headlineText() 组词 */
+export interface HeadlineClause {
+  name: LMsg
+  display: string | LMsg
+}
+
+export interface VerdictHeadline {
+  stance: Stance
+  variant: "both" | "bull" | "bear" | "flat"
+  bull?: HeadlineClause
+  bear?: HeadlineClause
+}
+
+/** 主题行：Top 指标摘要 或 规则触发的整句提示 */
+export type ThemeItem =
+  | { kind: "indicator"; name: LMsg; display: string | LMsg; verdict: LMsg }
+  | { kind: "msg"; msg: LMsg }
 
 export interface Verdict {
   date: string
@@ -206,9 +237,9 @@ export interface Verdict {
   confidence: number
   indicators: CrossIndicator[]
   mix: { bull: number; neutral: number; bear: number }
-  headline: string
-  themes: string[]
-  watch: string[]
+  headline: VerdictHeadline
+  themes: ThemeItem[]
+  watch: LMsg[]
   /** 记录当时的总市值 24h 变化（%），供次日复盘 */
   mcapChg24h: number
 }
@@ -281,7 +312,6 @@ export function computeVerdict(input: VerdictInput): Verdict {
   })()
   const globalValid = global.total_market_cap_usd > 0
   const domValid = global.btc_dominance > 0
-  const approxTag = globalValid ? "" : " · top12 近似"
   const mcapChg24h = globalValid ? global.market_cap_change_24h_pct : (coinsWeighted24h ?? 0)
   const dominance = domValid
     ? global.btc_dominance
@@ -294,13 +324,15 @@ export function computeVerdict(input: VerdictInput): Verdict {
     const s = fngScore(fng.value)
     inds.push({
       key: "fng",
-      name: "恐惧贪婪指数",
-      domain: "情绪",
-      display: `${fng.value} · ${fng.classification}`,
+      name: { key: "cross.ind.fng.name" },
+      domain: "sentiment",
+      display: { key: "ind.sentiment.display", params: { value: fng.value, class: fng.classification } },
       score: s,
       weight: 1.2,
-      verdict: s > 0.2 ? "恐慌区间，逆向偏多" : s < -0.2 ? "贪婪区间，情绪偏热" : "情绪中性",
-      rationale: "逆向指标：≤20 极度恐慌计 +1，45-55 中性，≥80 极度贪婪计 −1",
+      verdict: {
+        key: s > 0.2 ? "cross.ind.fng.v1" : s < -0.2 ? "cross.ind.fng.v2" : "cross.ind.fng.v3",
+      },
+      rationale: { key: "cross.ind.fng.rationale" },
     })
   }
 
@@ -308,46 +340,56 @@ export function computeVerdict(input: VerdictInput): Verdict {
   if (globalValid || coinsWeighted24h != null) {
     inds.push({
       key: "mcap24h",
-      name: "总市值 24h 动量",
-      domain: "资金",
-      display: pctStr(mcapChg24h) + approxTag,
+      name: { key: "cross.ind.mcap24h.name" },
+      domain: "funds",
+      display: globalValid
+        ? pctStr(mcapChg24h)
+        : { key: "cross.ind.mcap24h.displayApprox", params: { v: pctStr(mcapChg24h) } },
       score: clamp(mcapChg24h / 2.5, -1, 1),
       weight: 1.4,
-      verdict:
-        mcapChg24h > 0.5
-          ? "全市场市值上行"
-          : mcapChg24h < -0.5
-            ? "全市场市值回落"
-            : "市值横盘",
-      rationale: "±2.5% 饱和线性计分，直接反映风险偏好方向；CoinGecko 限流时以 top12 市值加权近似",
+      verdict: {
+        key:
+          mcapChg24h > 0.5 ? "cross.ind.mcap24h.v1"
+          : mcapChg24h < -0.5 ? "cross.ind.mcap24h.v2"
+          : "cross.ind.mcap24h.v3",
+      },
+      rationale: { key: "cross.ind.mcap24h.rationale" },
     })
   }
 
   if (cross.breadth) {
     inds.push({
       key: "mcap7d",
-      name: "总市值 7d 动量",
-      domain: "资金",
+      name: { key: "cross.ind.mcap7d.name" },
+      domain: "funds",
       display: pctStr(cross.breadth.chg7d),
       score: clamp(cross.breadth.chg7d / 6, -1, 1),
       weight: 1.0,
-      verdict: cross.breadth.chg7d > 1 ? "周线资金流入" : cross.breadth.chg7d < -1 ? "周线资金回落" : "周线动能平淡",
-      rationale: "top50 市值加权 7d 涨跌幅，±6% 饱和",
+      verdict: {
+        key:
+          cross.breadth.chg7d > 1 ? "cross.ind.mcap7d.v1"
+          : cross.breadth.chg7d < -1 ? "cross.ind.mcap7d.v2"
+          : "cross.ind.mcap7d.v3",
+      },
+      rationale: { key: "cross.ind.mcap7d.rationale" },
     })
     inds.push({
       key: "breadth",
-      name: "市场广度",
-      domain: "资金",
-      display: `${Math.round(cross.breadth.advancing * cross.breadth.total)}/${cross.breadth.total} 上涨`,
+      name: { key: "cross.ind.breadth.name" },
+      domain: "funds",
+      display: {
+        key: "cross.ind.breadth.display",
+        params: { up: Math.round(cross.breadth.advancing * cross.breadth.total), total: cross.breadth.total },
+      },
       score: clamp((cross.breadth.advancing - 0.5) / 0.35, -1, 1),
       weight: 0.7,
-      verdict:
-        cross.breadth.advancing > 0.6
-          ? "普涨格局"
-          : cross.breadth.advancing < 0.4
-            ? "普跌格局"
-            : "涨跌互现",
-      rationale: "top50 中 7d 上涨家数占比，50% 为中性，85% 饱和",
+      verdict: {
+        key:
+          cross.breadth.advancing > 0.6 ? "cross.ind.breadth.v1"
+          : cross.breadth.advancing < 0.4 ? "cross.ind.breadth.v2"
+          : "cross.ind.breadth.v3",
+      },
+      rationale: { key: "cross.ind.breadth.rationale" },
     })
   }
 
@@ -355,18 +397,18 @@ export function computeVerdict(input: VerdictInput): Verdict {
     const st = cross.stablecoin
     inds.push({
       key: "stablecoin",
-      name: "稳定币市值 7d",
-      domain: "资金",
+      name: { key: "cross.ind.stablecoin.name" },
+      domain: "funds",
       display: `$${(st.mcap / 1e9).toFixed(1)}B · ${pctStr(st.chg7d)}`,
       score: clamp(st.chg7d / 2, -1, 1),
       weight: 1.1,
-      verdict:
-        st.chg7d > 0.5
-          ? "稳定币扩张，场外资金入场"
-          : st.chg7d < -0.5
-            ? "稳定币收缩，资金离场迹象"
-            : "稳定币平稳",
-      rationale: "Defillama 全网稳定币总市值，7d ±2% 饱和：上升 = 资金进入加密",
+      verdict: {
+        key:
+          st.chg7d > 0.5 ? "cross.ind.stablecoin.v1"
+          : st.chg7d < -0.5 ? "cross.ind.stablecoin.v2"
+          : "cross.ind.stablecoin.v3",
+      },
+      rationale: { key: "cross.ind.stablecoin.rationale" },
     })
   }
 
@@ -375,39 +417,36 @@ export function computeVerdict(input: VerdictInput): Verdict {
     const d = cross.derivatives
     inds.push({
       key: "funding",
-      name: "BTC 资金费率",
-      domain: "衍生品",
+      name: { key: "cross.ind.funding.name" },
+      domain: "derivatives",
       display: `${d.btcFundingPct8h.toFixed(4)}% / 8h`,
       score: fundingScore(d.btcFundingPct8h),
       weight: 1.0,
-      verdict:
-        d.btcFundingPct8h >= 0.08
-          ? "费率过热，多头杠杆拥挤"
-          : d.btcFundingPct8h >= 0.03
-            ? "费率偏热"
-            : d.btcFundingPct8h >= 0.005
-              ? "温和多头建仓"
-              : d.btcFundingPct8h >= -0.005
-                ? "费率贴近零"
-                : "负费率，空头付费",
-      rationale: "Binance 永续 8h 费率：0.005-0.03% 温和多头 +0.4；≥0.08% 过热 −1；深度负值逆向 +0.6",
+      verdict: {
+        key:
+          d.btcFundingPct8h >= 0.08 ? "cross.ind.funding.v1"
+          : d.btcFundingPct8h >= 0.03 ? "cross.ind.funding.v2"
+          : d.btcFundingPct8h >= 0.005 ? "cross.ind.funding.v3"
+          : d.btcFundingPct8h >= -0.005 ? "cross.ind.funding.v4"
+          : "cross.ind.funding.v5",
+      },
+      rationale: { key: "cross.ind.funding.rationale" },
     })
     inds.push({
       key: "ls",
-      name: "BTC 多空账户比",
-      domain: "衍生品",
+      name: { key: "cross.ind.ls.name" },
+      domain: "derivatives",
       display: d.btcLsRatio.toFixed(2),
       score: lsScore(d.btcLsRatio),
       weight: 0.8,
-      verdict:
-        d.btcLsRatio >= 1.8
-          ? "散户多头拥挤"
-          : d.btcLsRatio >= 1.2
-            ? "多头略占优"
-            : d.btcLsRatio > 0.8
-              ? "多空均衡"
-              : "空头略占优",
-      rationale: "Binance 全局多空账户比（日频，逆向）：≥1.8 多头拥挤 −1；≤0.8 空头拥挤 +0.5",
+      verdict: {
+        key:
+          d.btcLsRatio >= 1.8 ? "cross.ind.ls.v1"
+          : d.btcLsRatio >= 1.2 ? "cross.ind.ls.v2"
+          : d.btcLsRatio > 0.8 ? "cross.ind.ls.v3"
+          : "cross.ind.ls.v4",
+      },
+      rationale: { key: "cross.ind.ls.rationale" },
     })
   }
 
@@ -420,18 +459,21 @@ export function computeVerdict(input: VerdictInput): Verdict {
   if (domValid || (capSum > 0 && btc)) {
     inds.push({
       key: "dominance",
-      name: "BTC 占比 24h",
-      domain: "结构",
-      display: `${dominance.toFixed(1)}% · ${pctStr(domChgApprox)}${approxTag}`,
+      name: { key: "cross.ind.dom.name" },
+      domain: "structure",
+      display: {
+        key: globalValid ? "cross.ind.dom.display" : "cross.ind.dom.displayApprox",
+        params: { dom: dominance.toFixed(1), chg: pctStr(domChgApprox) },
+      },
       score: clamp(-domChgApprox / 0.8, -1, 1),
       weight: 0.9,
-      verdict:
-        domChgApprox > 0.5
-          ? "资金回流 BTC 避险"
-          : domChgApprox < -0.5
-            ? "资金外溢山寨"
-            : "占比稳定",
-      rationale: "占比上升 = 资金避险回流 BTC（risk-off），下降 = 资金外溢山寨（risk-on）；±0.8pp 饱和",
+      verdict: {
+        key:
+          domChgApprox > 0.5 ? "cross.ind.dom.v1"
+          : domChgApprox < -0.5 ? "cross.ind.dom.v2"
+          : "cross.ind.dom.v3",
+      },
+      rationale: { key: "cross.ind.dom.rationale" },
     })
   }
 
@@ -443,36 +485,36 @@ export function computeVerdict(input: VerdictInput): Verdict {
       e24 != null && b24 != null && b24 !== -100 ? ((1 + e24 / 100) / (1 + b24 / 100) - 1) * 100 : null
     inds.push({
       key: "ethbtc",
-      name: "ETH/BTC 24h",
-      domain: "结构",
+      name: { key: "cross.ind.ethbtc.name" },
+      domain: "structure",
       display: `${ratio.toFixed(5)} · ${pctStr(chg)}`,
       score: clamp((chg ?? 0) / 2, -1, 1),
       weight: 0.7,
-      verdict:
-        (chg ?? 0) > 0.5
-          ? "ETH 相对走强，risk-on 信号"
-          : (chg ?? 0) < -0.5
-            ? "BTC 相对走强，避险倾向"
-            : "相对强度平稳",
-      rationale: "ETH/BTC 是风险偏好的经典代理：ETH 强 = 山寨季倾向，±2% 饱和",
+      verdict: {
+        key:
+          (chg ?? 0) > 0.5 ? "cross.ind.ethbtc.v1"
+          : (chg ?? 0) < -0.5 ? "cross.ind.ethbtc.v2"
+          : "cross.ind.ethbtc.v3",
+      },
+      rationale: { key: "cross.ind.ethbtc.rationale" },
     })
   }
 
   if (cross.breadth) {
     inds.push({
       key: "alt",
-      name: "山寨 7d 动量",
-      domain: "结构",
+      name: { key: "cross.ind.alt.name" },
+      domain: "structure",
       display: pctStr(cross.breadth.altChg7d),
       score: clamp(cross.breadth.altChg7d / 8, -1, 1),
       weight: 0.7,
-      verdict:
-        cross.breadth.altChg7d > 2
-          ? "山寨领涨，投机活跃"
-          : cross.breadth.altChg7d < -2
-            ? "山寨领跌，风险资产承压"
-            : "山寨动能平淡",
-      rationale: "剔除 BTC/ETH/稳定币的市值加权 7d 涨跌幅，±8% 饱和",
+      verdict: {
+        key:
+          cross.breadth.altChg7d > 2 ? "cross.ind.alt.v1"
+          : cross.breadth.altChg7d < -2 ? "cross.ind.alt.v2"
+          : "cross.ind.alt.v3",
+      },
+      rationale: { key: "cross.ind.alt.rationale" },
     })
   }
 
@@ -502,50 +544,50 @@ export function computeVerdict(input: VerdictInput): Verdict {
   const agreement = Math.max(mix.bull, mix.neutral, mix.bear) / (inds.length || 1)
   const confidence = clamp(0.5 * agreement + 0.5 * (Math.abs(composite) / 100), 0.3, 0.95)
 
-  /* 规则化叙述 */
+  /* 规则化叙述：结构化存储（key + 参数），渲染层经 headlineText/themeText 组词 */
   const byContrib = [...inds].sort(
     (a, b) => Math.abs(b.score * b.weight) - Math.abs(a.score * a.weight),
   )
   const topBull = inds.filter((i) => i.score > 0.2).sort((a, b) => b.score * b.weight - a.score * a.weight)[0]
   const topBear = inds.filter((i) => i.score < -0.2).sort((a, b) => a.score * a.weight - b.score * a.weight)[0]
 
-  const mcap24 = mcapChg24h
-  let headline: string
-  if (topBull && topBear) {
-    headline = `${STANCE_LABEL[stance]}：${topBull.name}（${topBull.display}）与 ${topBear.name}（${topBear.display}）多空拉锯`
-  } else if (topBull) {
-    headline = `${STANCE_LABEL[stance]}：${topBull.name}（${topBull.display}）引领，暂无显著反向指标`
-  } else if (topBear) {
-    headline = `${STANCE_LABEL[stance]}：${topBear.name}（${topBear.display}）主导压制`
-  } else {
-    headline = `${STANCE_LABEL[stance]}：各指标读数均在中性区间`
-  }
+  const headline: VerdictHeadline =
+    topBull && topBear
+      ? { stance, variant: "both", bull: topBull, bear: topBear }
+      : topBull
+        ? { stance, variant: "bull", bull: topBull }
+        : topBear
+          ? { stance, variant: "bear", bear: topBear }
+          : { stance, variant: "flat" }
 
-  const themes: string[] = byContrib.slice(0, 4).map(
-    (i) => `${i.name} ${i.display} — ${i.verdict}`,
-  )
-  if (cross.stablecoin && mcap24 < -1 && cross.stablecoin.chg7d > 0.5) {
-    themes.unshift("背离信号：市值回落但稳定币扩张，场外资金并未离场")
+  const themes: ThemeItem[] = byContrib.slice(0, 4).map((i) => ({
+    kind: "indicator",
+    name: i.name,
+    display: i.display,
+    verdict: i.verdict,
+  }))
+  if (cross.stablecoin && mcapChg24h < -1 && cross.stablecoin.chg7d > 0.5) {
+    themes.unshift({ kind: "msg", msg: { key: "cross.theme.divergence" } })
   }
-  if (cross.derivatives && mcap24 > 1 && cross.derivatives.btcFundingPct8h >= 0.03) {
-    themes.unshift("杠杆警示：上涨伴随费率偏热，多头拥挤度上升")
+  if (cross.derivatives && mcapChg24h > 1 && cross.derivatives.btcFundingPct8h >= 0.03) {
+    themes.unshift({ kind: "msg", msg: { key: "cross.theme.leverage" } })
   }
-  if (fng && fng.value >= 75) themes.unshift(`情绪过热：恐惧贪婪 ${fng.value}，处于贪婪高位`)
-  if (fng && fng.value <= 25) themes.unshift(`情绪冰点：恐惧贪婪 ${fng.value}，历史上常对应阶段性底部区域`)
+  if (fng && fng.value >= 75) themes.unshift({ kind: "msg", msg: { key: "cross.theme.fngHot", params: { value: fng.value } } })
+  if (fng && fng.value <= 25) themes.unshift({ kind: "msg", msg: { key: "cross.theme.fngIce", params: { value: fng.value } } })
 
-  const watch: string[] = []
+  const watch: LMsg[] = []
   if (cross.derivatives && cross.derivatives.btcFundingPct8h >= 0.08)
-    watch.push("费率过热：关注多头去杠杆引发的急跌，高杠杆多头仓需减仓或对冲")
+    watch.push({ key: "cross.watch.fundingHot" })
   if (cross.derivatives && cross.derivatives.btcFundingPct8h <= -0.005)
-    watch.push("负费率延续：空头持续付费，警惕轧空反弹")
-  if (fng && fng.value >= 75) watch.push("贪婪极值区：情绪逆转往往从最拥挤处开始，追高需谨慎")
-  if (fng && fng.value <= 25) watch.push("恐慌极值区：分批布局的胜率窗口，但需等待费率/广度确认")
+    watch.push({ key: "cross.watch.negativeFunding" })
+  if (fng && fng.value >= 75) watch.push({ key: "cross.watch.greedExtreme" })
+  if (fng && fng.value <= 25) watch.push({ key: "cross.watch.fearExtreme" })
   if (cross.stablecoin && cross.stablecoin.chg7d < -1)
-    watch.push("稳定币 7d 收缩：场外资金退潮，反弹持续性存疑")
-  if (domChgApprox > 0.5) watch.push("BTC 占比抬升：资金避险回流，山寨仓位宜降不宜加")
+    watch.push({ key: "cross.watch.stableShrink" })
+  if (domChgApprox > 0.5) watch.push({ key: "cross.watch.domRise" })
   if ((domChgApprox ?? 0) < -0.5 && cross.breadth && cross.breadth.altChg7d > 2)
-    watch.push("占比回落 + 山寨领涨：risk-on 外溢进行中，注意情绪过热节奏")
-  if (!watch.length) watch.push("无极值读数：维持当前立场，重点跟踪稳定币流入与费率是否延续")
+    watch.push({ key: "cross.watch.domFallAlt" })
+  if (!watch.length) watch.push({ key: "cross.watch.none" })
 
   return {
     date: todayKey(),
@@ -557,8 +599,51 @@ export function computeVerdict(input: VerdictInput): Verdict {
     headline,
     themes: themes.slice(0, 5),
     watch: watch.slice(0, 4),
-    mcapChg24h: mcap24,
+    mcapChg24h,
   }
+}
+
+/* ---------------------------- 叙述渲染（渲染期取词） ---------------------------- */
+
+/** 规则化标题 → 当前语言文案；历史存档可能是旧版纯文本串，原样返回 */
+export function headlineText(h: VerdictHeadline | string): string {
+  if (typeof h === "string") return h
+  const stance = t(STANCE_KEY[h.stance])
+  switch (h.variant) {
+    case "both":
+      return t("cross.headline.both", {
+        stance,
+        bull: tm(h.bull!.name),
+        bullD: tm(h.bull!.display),
+        bear: tm(h.bear!.name),
+        bearD: tm(h.bear!.display),
+      })
+    case "bull":
+      return t("cross.headline.bull", {
+        stance,
+        bull: tm(h.bull!.name),
+        bullD: tm(h.bull!.display),
+      })
+    case "bear":
+      return t("cross.headline.bear", {
+        stance,
+        bear: tm(h.bear!.name),
+        bearD: tm(h.bear!.display),
+      })
+    default:
+      return t("cross.headline.flat", { stance })
+  }
+}
+
+/** 主题行 → 当前语言文案 */
+export function themeText(item: ThemeItem): string {
+  return item.kind === "indicator"
+    ? t("cross.theme.indicator", {
+        name: tm(item.name),
+        display: tm(item.display),
+        verdict: tm(item.verdict),
+      })
+    : t(item.msg.key, item.msg.params)
 }
 
 /* ------------------------------ 判断历史与复盘 ------------------------------ */
@@ -568,7 +653,8 @@ export interface VerdictRecord {
   stance: Stance
   composite: number
   mcapChg24h: number
-  headline: string
+  /** 旧版存档为纯文本串，新版为结构化标题（渲染层经 headlineText 组词） */
+  headline: VerdictHeadline | string
 }
 
 export type Grade = "pending" | "correct" | "wrong" | "partial"
@@ -654,7 +740,8 @@ export function cryptoMcapOf(global: GlobalData, coins: Coin[]): number {
 
 export interface MarketAnchor {
   key: string
-  name: string
+  /** 展示名（文案 key，渲染层翻译） */
+  nameKey: MessageKey
   value: number
   /** 加密总市值为实时值，其余为参考常量 */
   live?: boolean
@@ -665,10 +752,10 @@ export interface MarketAnchor {
  * 加密总市值为实时值，随行情刷新。
  */
 export const MARKET_ANCHORS: MarketAnchor[] = [
-  { key: "crypto", name: "加密总市值", value: -1, live: true },
-  { key: "gold", name: "黄金", value: 31.13e12 },
-  { key: "us_equity", name: "美股总市值", value: 64.26e12 },
-  { key: "sp500", name: "标普 500", value: 52.95e12 },
-  { key: "m2", name: "美国 M2", value: 23.22e12 },
-  { key: "apple", name: "苹果公司", value: 4.75e12 },
+  { key: "crypto", nameKey: "anchor.crypto", value: -1, live: true },
+  { key: "gold", nameKey: "anchor.gold", value: 31.13e12 },
+  { key: "us_equity", nameKey: "anchor.usEquity", value: 64.26e12 },
+  { key: "sp500", nameKey: "anchor.sp500", value: 52.95e12 },
+  { key: "m2", nameKey: "anchor.m2", value: 23.22e12 },
+  { key: "apple", nameKey: "anchor.apple", value: 4.75e12 },
 ]

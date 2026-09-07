@@ -1,11 +1,14 @@
 import { memo } from "react"
+import { Gauge } from "lucide-react"
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardKicker } from "@/components/ui/card"
+import { t, useT } from "@/i18n"
 import type { FearGreedEntry } from "@/lib/api"
-import { FNG_GRADIENT, fngShade, fngZh } from "@/lib/fng"
+import { FNG_GRADIENT, fngLabel, fngShade } from "@/lib/fng"
 
 /** 恐惧贪婪指数卡（alternative.me 数据源）+ 30 日情绪走势 */
 export const SentimentCard = memo(function SentimentCard({ fng }: { fng: FearGreedEntry[] }) {
+  useT()
   const latest = fng[0]
   const history = [...fng].reverse() // 时间升序，末尾为今天
   const weekAgo = fng[Math.min(7, fng.length - 1)]
@@ -16,15 +19,12 @@ export const SentimentCard = memo(function SentimentCard({ fng }: { fng: FearGre
   return (
     <Card className="flex h-full flex-col">
       <CardHeader className="pb-0">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-semibold tracking-widest text-muted-foreground uppercase">
-            市场情绪
-          </CardTitle>
-          <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
-            FEAR &amp; GREED
-          </span>
-        </div>
-        <CardDescription className="text-xs">市场情绪指数</CardDescription>
+        <CardKicker
+          icon={Gauge}
+          title={t("page.sentiment.title")}
+          en="FEAR & GREED"
+          desc={t("sc.desc")}
+        />
       </CardHeader>
 
       <CardContent className="flex flex-1 flex-col justify-between gap-4">
@@ -35,7 +35,7 @@ export const SentimentCard = memo(function SentimentCard({ fng }: { fng: FearGre
                 {String(latest.value).padStart(2, "0")}
               </span>
               <div className="flex flex-col gap-1 pb-0.5">
-                <span className="text-sm font-semibold">{fngZh(latest.classification)}</span>
+                <span className="text-sm font-semibold">{fngLabel(latest.classification)}</span>
                 <span className="font-mono text-[10px] text-muted-foreground">/ 100</span>
               </div>
             </div>
@@ -52,18 +52,17 @@ export const SentimentCard = memo(function SentimentCard({ fng }: { fng: FearGre
               />
             </div>
             <div className="flex justify-between font-mono text-[10px] text-muted-foreground">
-              <span>极度恐惧</span>
-              <span>中性</span>
-              <span>极度贪婪</span>
+              <span>{t("sc.scaleLeft")}</span>
+              <span>{t("sc.scaleMid")}</span>
+              <span>{t("sc.scaleRight")}</span>
             </div>
 
             {/* 30 日情绪柱状 */}
             <div>
               <div className="mb-1.5 flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
-                <span>近 30 日走势</span>
+                <span>{t("common.trend30")}</span>
                 <span className="font-mono normal-case tracking-normal">
-                  周变化 {weekDelta >= 0 ? "+" : ""}
-                  {weekDelta}
+                  {t("sc.weekChg", { v: `${weekDelta >= 0 ? "+" : ""}${weekDelta}` })}
                 </span>
               </div>
               <div className="flex h-12 items-end gap-[2px]" aria-hidden>
@@ -79,14 +78,14 @@ export const SentimentCard = memo(function SentimentCard({ fng }: { fng: FearGre
                 ))}
               </div>
               <div className="mt-1.5 flex justify-between font-mono text-[10px] text-muted-foreground">
-                <span>月最低 {monthMin}</span>
-                <span>月最高 {monthMax}</span>
+                <span>{t("sc.monthMin", { v: monthMin })}</span>
+                <span>{t("sc.monthMax", { v: monthMax })}</span>
               </div>
             </div>
           </>
         ) : (
           <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
-            情绪数据暂不可用
+            {t("sc.unavailable")}
           </div>
         )}
       </CardContent>

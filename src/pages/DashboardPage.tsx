@@ -24,6 +24,7 @@ import {
 } from "@/components/loading"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useMarket, useLive } from "@/context/MarketDataContext"
+import { t, useT } from "@/i18n"
 import { usePageMeta } from "@/hooks/usePageMeta"
 import type { Coin } from "@/lib/api"
 
@@ -141,7 +142,8 @@ function DashboardSkeleton() {
 }
 
 export function DashboardPage() {
-  usePageMeta({ title: "总览 · CRYPTO STATUS" })
+  useT()
+  usePageMeta({ title: t("meta.dashboard") })
   const { snapshot, error, loading, refresh, patchedChart, analysis } = useMarket()
   const tickers = useLive()
   const navigate = useNavigate()
@@ -158,11 +160,11 @@ export function DashboardPage() {
           <TriangleAlert className="size-6" />
         </div>
         <div className="text-center">
-          <p className="font-semibold">数据加载失败</p>
+          <p className="font-semibold">{t("common.loadFail")}</p>
           <p className="mt-1 font-mono text-xs text-muted-foreground">{error}</p>
         </div>
         <Button onClick={refresh} variant="outline" size="sm" className="gap-1.5">
-          <RotateCw className="size-3.5" /> 重试
+          <RotateCw className="size-3.5" /> {t("common.retry")}
         </Button>
       </main>
     )
@@ -174,8 +176,8 @@ export function DashboardPage() {
     <main className="mx-auto w-full max-w-7xl flex-1 space-y-6 px-4 pb-20 pt-6 sm:px-6">
       <PageHeader
         en="Dashboard"
-        title="市场总览"
-        description="实时行情 · 技术信号 · 牛熊状态 · 市场情绪"
+        title={t("page.dashboard.title")}
+        description={t("page.dashboard.desc")}
       />
 
       {/* 第一屏：信号 / 牛熊 / 情绪 */}
@@ -186,9 +188,9 @@ export function DashboardPage() {
           ) : (
             <Card className="h-full">
               <CardContent className="flex h-full flex-col items-center justify-center gap-2 py-16 text-center">
-                <p className="text-sm font-semibold">指标计算数据不足</p>
+                <p className="text-sm font-semibold">{t("dash.noInd")}</p>
                 <p className="max-w-xs text-xs text-muted-foreground">
-                  需要至少 210 天的 BTC 日线数据，请稍后刷新重试
+                  {t("dash.noIndDesc")}
                 </p>
               </CardContent>
             </Card>
@@ -199,7 +201,7 @@ export function DashboardPage() {
             <RegimeCard analysis={analysis} />
           ) : (
             <Card className="h-full">
-              <CardContent className="py-16 text-center text-xs text-muted-foreground">暂无数据</CardContent>
+              <CardContent className="py-16 text-center text-xs text-muted-foreground">{t("common.noData")}</CardContent>
             </Card>
           )}
         </div>
@@ -215,13 +217,13 @@ export function DashboardPage() {
 
       {/* BTC 走势 */}
       <section className="fade-up space-y-3" style={{ animationDelay: "200ms" }}>
-        <SectionLabel>市场结构 MARKET STRUCTURE</SectionLabel>
+        <SectionLabel>{t("dash.section.structure")}</SectionLabel>
         {chart && <BtcChartCard chart={chart} analysis={analysis} />}
       </section>
 
       {/* 实时价格 */}
       <section className="fade-up space-y-3" style={{ animationDelay: "240ms" }}>
-        <SectionLabel>实时行情 LIVE PRICES</SectionLabel>
+        <SectionLabel>{t("dash.section.live")}</SectionLabel>
         <PricesTable
           coins={snapshot.coins}
           live={tickers}
@@ -232,7 +234,7 @@ export function DashboardPage() {
       {/* 指标明细 */}
       {analysis && (
         <section className="fade-up space-y-3" style={{ animationDelay: "280ms" }}>
-          <SectionLabel>信号推导 SIGNAL BREAKDOWN</SectionLabel>
+          <SectionLabel>{t("dash.section.signal")}</SectionLabel>
           <IndicatorBreakdown analysis={analysis} />
         </section>
       )}

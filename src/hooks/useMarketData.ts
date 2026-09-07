@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
+import { t } from "@/i18n"
 import { fetchSnapshot, type Snapshot } from "@/lib/api"
 
 const REFRESH_MS = 90_000
@@ -30,7 +31,7 @@ export function useMarketData() {
       setError(null)
       setLastUpdated(Date.now())
     } catch (e) {
-      setError(e instanceof Error ? e.message : "数据加载失败")
+      setError(e instanceof Error ? e.message : t("common.loadFail"))
     } finally {
       setLoading(false)
       setRefreshing(false)

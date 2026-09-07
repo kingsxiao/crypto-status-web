@@ -5,7 +5,18 @@
  * 综合多空分数，并给出看多 / 看空结论与牛熊周期判定。
  */
 
+import type { LMsg, MessageKey } from "@/i18n"
 import type { FearGreedEntry, MarketChart } from "./api"
+
+/* ------------------------------ 文案 key 映射 ------------------------------ */
+
+/** 牛熊周期 → 文案 key（label 由渲染层翻译，存储/计算仅携带中性枚举） */
+export const REGIME_KEY: Record<Regime, { label: MessageKey; desc: MessageKey }> = {
+  bull: { label: "regime.bull", desc: "regime.bull.desc" },
+  bear: { label: "regime.bear", desc: "regime.bear.desc" },
+  recovering: { label: "regime.recovering", desc: "regime.recovering.desc" },
+  weakening: { label: "regime.weakening", desc: "regime.weakening.desc" },
+}
 
 /* ------------------------------ 基础数学函数 ------------------------------ */
 
@@ -70,15 +81,16 @@ export const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.ma
 
 export interface IndicatorResult {
   key: string
-  name: string
-  /** 展示用的当前读数 */
-  display: string
+  /** 指标名（可翻译消息，渲染层经 tm() 还原） */
+  name: LMsg
+  /** 展示用读数：纯数字串直接展示，含词汇时为可翻译消息 */
+  display: string | LMsg
   /** [-2, +2] 分数，正=看多，负=看空 */
   score: number
   /** 归一化权重 */
   weight: number
-  /** 一句话解读 */
-  verdict: string
+  /** 一句话解读（可翻译消息） */
+  verdict: LMsg
   /** 逻辑类型：趋势跟随 / 动能 / 逆向情绪 */
   kind: "trend" | "momentum" | "sentiment" | "position"
 }
@@ -90,13 +102,10 @@ export interface Analysis {
   /** [-100, +100] */
   composite: number
   signal: {
-    label: string
     level: "strong-long" | "long" | "neutral" | "short" | "strong-short"
   }
   regime: {
     state: Regime
-    label: string
-    description: string
     days: number
     priceVsMa200: number
     ma50VsMa200: number
@@ -217,13 +226,6 @@ export function analyze(btcChart: MarketChart, fng: FearGreedEntry[]): Analysis 
   let days = 1
   for (let i = prices.length - 1; i >= 205 && stateAt(i) === regime; i--) days++
 
-  const regimeMeta: Record<Regime, { label: string; description: string }> = {
-    bull: { label: "牛市", description: "价格站上 200 日均线，50 日均线在 200 日上方，趋势结构完整" },
-    bear: { label: "熊市", description: "价格跌破 200 日均线，50 日均线在 200 日下方，下降趋势确立" },
-    recovering: { label: "修复期", description: "价格重新站上 200 日均线，但均线尚未金叉，趋势待确认" },
-    weakening: { label: "转弱期", description: "价格跌破 200 日均线，但均线尚未死叉，可能是深度回调" },
-  }
-
   /* 各指标 */
   const trend = scoreTrend(price, ma200)
   const cross = scoreCross(ma50, ma200)
@@ -231,43 +233,45 @@ export function analyze(btcChart: MarketChart, fng: FearGreedEntry[]): Analysis 
 
   indicators.push({
     key: "trend",
-    name: "价格 vs 200日均线",
+    name: { key: "ind.trend.name" },
     display: `${trend.pct >= 0 ? "+" : ""}${trend.pct.toFixed(1)}%`,
     score: trend.score,
     weight: 22,
     verdict:
       trend.pct >= 0
-        ? `价格高于 200 日均线 ${Math.abs(trend.pct).toFixed(1)}%，长期趋势偏多`
-        : `价格低于 200 日均线 ${Math.abs(trend.pct).toFixed(1)}%，长期趋势承压`,
+        ? { key: "ind.trend.vAbove", params: { pct: Math.abs(trend.pct).toFixed(1) } }
+        : { key: "ind.trend.vBelow", params: { pct: Math.abs(trend.pct).toFixed(1) } },
     kind: "trend",
   })
 
   indicators.push({
     key: "cross",
-    name: "均线交叉（50/200）",
-    display: golden ? "金叉形态" : "死叉形态",
+    name: { key: "ind.cross.name" },
+    display: { key: golden ? "ind.cross.golden" : "ind.cross.dead" },
     score: cross.score,
     weight: 14,
     verdict: golden
-      ? `50 日均线高于 200 日均线 ${Math.abs(cross.pct).toFixed(1)}%，金叉结构维持`
-      : `50 日均线低于 200 日均线 ${Math.abs(cross.pct).toFixed(1)}%，死叉结构维持`,
+      ? { key: "ind.cross.vGolden", params: { pct: Math.abs(cross.pct).toFixed(1) } }
+      : { key: "ind.cross.vDead", params: { pct: Math.abs(cross.pct).toFixed(1) } },
     kind: "trend",
   })
 
   if (rsi14 !== null) {
     indicators.push({
       key: "rsi",
-      name: "RSI（14日）",
+      name: { key: "ind.rsi.name" },
       display: rsi14.toFixed(1),
       score: scoreRsi(rsi14),
       weight: 16,
-      verdict:
-        rsi14 >= 75 ? "已进入超买区，短期回调风险上升（逆势减分）"
-        : rsi14 >= 60 ? "多头动能强劲，处于强势区间"
-        : rsi14 >= 50 ? "动能略偏多头"
-        : rsi14 >= 45 ? "动能中性"
-        : rsi14 >= 25 ? "空头动能占优，走势偏弱"
-        : "已进入超卖区，存在超跌反弹机会（逆势加分）",
+      verdict: {
+        key:
+          rsi14 >= 75 ? "ind.rsi.v1"
+          : rsi14 >= 60 ? "ind.rsi.v2"
+          : rsi14 >= 50 ? "ind.rsi.v3"
+          : rsi14 >= 45 ? "ind.rsi.v4"
+          : rsi14 >= 25 ? "ind.rsi.v5"
+          : "ind.rsi.v6",
+      },
       kind: "momentum",
     })
   }
@@ -276,61 +280,62 @@ export function analyze(btcChart: MarketChart, fng: FearGreedEntry[]): Analysis 
     const s = scoreMacd({ ...m, price })
     indicators.push({
       key: "macd",
-      name: "MACD（12/26/9）",
+      name: { key: "ind.macd.name" },
       display: `${m.hist >= 0 ? "+" : ""}${(m.hist / price * 100).toFixed(2)}%`,
       score: s,
       weight: 16,
-      verdict:
-        m.hist > 0
-          ? m.hist > m.prevHist
-            ? "MACD 红柱放大，多头动能在增强"
-            : "MACD 红柱收敛，多头动能减弱"
-          : m.hist < m.prevHist
-            ? "MACD 绿柱放大，空头动能在增强"
-            : "MACD 绿柱收敛，空头动能减弱",
+      verdict: {
+        key:
+          m.hist > 0
+            ? m.hist > m.prevHist ? "ind.macd.vExpandUp" : "ind.macd.vFadeUp"
+            : m.hist < m.prevHist ? "ind.macd.vExpandDown" : "ind.macd.vFadeDown",
+      },
       kind: "momentum",
     })
   }
 
   indicators.push({
     key: "momentum",
-    name: "价格动量（7/30日）",
+    name: { key: "ind.momentum.name" },
     display: `7D ${chg7 >= 0 ? "+" : ""}${chg7.toFixed(1)}% · 30D ${chg30 >= 0 ? "+" : ""}${chg30.toFixed(1)}%`,
     score: scoreMomentum(chg7, chg30),
     weight: 12,
-    verdict:
-      chg30 >= 0 ? "近一月收涨，中期资金流入迹象" : "近一月收跌，中期资金流出迹象",
+    verdict: { key: chg30 >= 0 ? "ind.momentum.vUp" : "ind.momentum.vDown" },
     kind: "momentum",
   })
 
   if (latestFng !== null) {
     indicators.push({
       key: "sentiment",
-      name: "恐惧贪婪指数",
-      display: `${latestFng} · ${fng[0].classification}`,
+      name: { key: "ind.sentiment.name" },
+      display: { key: "ind.sentiment.display", params: { value: latestFng, class: fng[0].classification } },
       score: scoreSentiment(latestFng),
       weight: 10,
-      verdict:
-        latestFng <= 25 ? "市场极度恐惧，历史上往往是布局区间（逆向加分）"
-        : latestFng <= 45 ? "市场情绪偏恐惧，逆向视角偏积极"
-        : latestFng < 55 ? "市场情绪中性"
-        : latestFng < 75 ? "市场情绪偏贪婪，需警惕过热"
-        : "市场极度贪婪，历史上往往是风险区间（逆向减分）",
+      verdict: {
+        key:
+          latestFng <= 25 ? "ind.sentiment.v1"
+          : latestFng <= 45 ? "ind.sentiment.v2"
+          : latestFng < 55 ? "ind.sentiment.v3"
+          : latestFng < 75 ? "ind.sentiment.v4"
+          : "ind.sentiment.v5",
+      },
       kind: "sentiment",
     })
   }
 
   indicators.push({
     key: "ath",
-    name: "距历史高点位置",
+    name: { key: "ind.ath.name" },
     display: `${drawdown.toFixed(1)}%`,
     score: scoreAthPosition(drawdown),
     weight: 10,
-    verdict:
-      drawdown >= -5 ? "逼近历史高点，市场处于强势周期"
-      : drawdown >= -30 ? "距高点回撤温和，处于高位震荡区"
-      : drawdown >= -55 ? "回撤较深，市场信心受损"
-      : "深度回撤，处于周期底部区域",
+    verdict: {
+      key:
+        drawdown >= -5 ? "ind.ath.v1"
+        : drawdown >= -30 ? "ind.ath.v2"
+        : drawdown >= -55 ? "ind.ath.v3"
+        : "ind.ath.v4",
+    },
     kind: "position",
   })
 
@@ -346,22 +351,12 @@ export function analyze(btcChart: MarketChart, fng: FearGreedEntry[]): Analysis 
     : composite > -40 ? "short"
     : "strong-short"
 
-  const labels: Record<Analysis["signal"]["level"], string> = {
-    "strong-long": "强烈看多",
-    long: "看多",
-    neutral: "中性观望",
-    short: "看空",
-    "strong-short": "强烈看空",
-  }
-
   return {
     indicators,
     composite,
-    signal: { label: labels[level], level },
+    signal: { level },
     regime: {
       state: regime,
-      label: regimeMeta[regime].label,
-      description: regimeMeta[regime].description,
       days,
       priceVsMa200: trend.pct,
       ma50VsMa200: cross.pct,

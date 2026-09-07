@@ -112,7 +112,7 @@ describe("computeVerdict", () => {
     expect(v.composite).toBeLessThanOrEqual(100)
     expect(v.confidence).toBeGreaterThanOrEqual(0.3)
     expect(v.confidence).toBeLessThanOrEqual(0.95)
-    expect(v.headline.length).toBeGreaterThan(0)
+    expect(v.headline.variant).toBeDefined()
     // mix 计数守恒
     expect(v.mix.bull + v.mix.neutral + v.mix.bear).toBe(v.indicators.length)
   })
@@ -125,7 +125,7 @@ describe("computeVerdict", () => {
     const v = computeVerdict({ global: zeroGlobal, fng: null, coins, cross: emptyCross })
     const mcap = v.indicators.find((i) => i.key === "mcap24h")
     expect(mcap).toBeDefined()
-    expect(mcap!.display).toContain("top12 近似")
+    expect((mcap!.display as { key: string }).key).toBe("cross.ind.mcap24h.displayApprox")
   })
 
   it("极度恐惧触发逆向加分与「情绪冰点」主题", () => {
@@ -138,7 +138,9 @@ describe("computeVerdict", () => {
     })
     const fng = v.indicators.find((i) => i.key === "fng")
     expect(fng!.score).toBe(1)
-    expect(v.themes.some((t) => t.includes("情绪冰点"))).toBe(true)
+    expect(
+      v.themes.some((th) => th.kind === "msg" && th.msg.key === "cross.theme.fngIce"),
+    ).toBe(true)
   })
 
   it("费率过热触发杠杆警示观察项", () => {
@@ -161,7 +163,7 @@ describe("computeVerdict", () => {
     })
     const funding = v.indicators.find((i) => i.key === "funding")
     expect(funding!.score).toBe(-1)
-    expect(v.watch.some((w) => w.includes("费率过热"))).toBe(true)
+    expect(v.watch.some((w) => w.key === "cross.watch.fundingHot")).toBe(true)
   })
 })
 

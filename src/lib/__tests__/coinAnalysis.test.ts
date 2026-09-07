@@ -8,11 +8,11 @@ function ramp(n: number, start: number, step: number): number[] {
 
 describe("verdictOfScore 边界", () => {
   it("1.2 / 0.25 / -0.25 / -1.2 四条分界", () => {
-    expect(verdictOfScore(1.2).text).toBe("看多")
-    expect(verdictOfScore(0.25).text).toBe("偏多")
-    expect(verdictOfScore(0).text).toBe("中性")
-    expect(verdictOfScore(-0.25).text).toBe("偏空")
-    expect(verdictOfScore(-1.2).text).toBe("看空")
+    expect(verdictOfScore(1.2).level).toBe("long")
+    expect(verdictOfScore(0.25).level).toBe("leanLong")
+    expect(verdictOfScore(0).level).toBe("neutral")
+    expect(verdictOfScore(-0.25).level).toBe("leanShort")
+    expect(verdictOfScore(-1.2).level).toBe("short")
     expect(verdictOfScore(2).tone).toBe("bull")
     expect(verdictOfScore(-2).tone).toBe("bear")
   })
@@ -62,7 +62,7 @@ describe("analyzeCoin", () => {
   it("MA200 数据不足时记入缺失说明", () => {
     const a = analyzeCoin(ramp(80, 100, 1), null)
     expect(a).not.toBeNull()
-    expect(a!.note).toContain("MA200")
+    expect(a!.note?.missing).toContain("coin.miss.ma200")
   })
 })
 

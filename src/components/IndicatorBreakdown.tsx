@@ -1,58 +1,57 @@
 import { memo } from "react"
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHead, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { DivergingBar } from "@/components/Gauge"
+import { t, tm, useT, type MessageKey } from "@/i18n"
+import { SCORE_LEVEL_KEY, verdictOfScore } from "@/lib/coinAnalysis"
 import type { Analysis, IndicatorResult } from "@/lib/indicators"
 import { cn } from "@/lib/utils"
 
-const kindLabel: Record<IndicatorResult["kind"], string> = {
-  trend: "趋势",
-  momentum: "动能",
-  sentiment: "情绪 · 逆向",
-  position: "周期位置",
-}
-
-function verdictOf(score: number) {
-  if (score >= 1.2) return { text: "看多", cls: "border-transparent bg-up text-up-foreground" }
-  if (score >= 0.25) return { text: "偏多", cls: "border-up text-up" }
-  if (score > -0.25) return { text: "中性", cls: "text-muted-foreground" }
-  if (score > -1.2) return { text: "偏空", cls: "border-down text-down" }
-  return { text: "看空", cls: "border-transparent bg-down text-down-foreground" }
+const kindLabel: Record<IndicatorResult["kind"], MessageKey> = {
+  trend: "kind.trend",
+  momentum: "kind.momentum",
+  sentiment: "kind.sentiment",
+  position: "kind.position",
 }
 
 /** 指标明细：展示合成信号的完整推导过程 */
 export const IndicatorBreakdown = memo(function IndicatorBreakdown({ analysis }: { analysis: Analysis }) {
+  useT()
   const wSum = analysis.indicators.reduce((a, i) => a + i.weight, 0)
 
   return (
     <Card>
       <CardHeader>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <CardTitle className="text-base">指标明细</CardTitle>
-            <CardDescription className="mt-1 text-xs">
-              综合分 = Σ(指标分 × 权重) ÷ 总权重，归一至 ±100
-            </CardDescription>
-          </div>
+        <CardHead title={t("ib.title")} desc={t("ob.formula")}>
           <Badge variant="outline" className="font-mono text-[10px] tracking-wider text-muted-foreground">
-            {analysis.indicators.length} 项指标 · BTC 主导
+            {t("ib.badge", { n: analysis.indicators.length })}
           </Badge>
-        </div>
+        </CardHead>
       </CardHeader>
 
       <CardContent className="space-y-1">
         <div className="hidden grid-cols-[24px_minmax(150px,1.2fr)_minmax(110px,0.9fr)_minmax(140px,1.6fr)_72px_80px] items-center gap-4 px-4 pb-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground lg:grid">
-          <span className="text-center">序</span>
-          <span>指标</span>
-          <span>当前读数</span>
-          <span>方向（左空右多）</span>
-          <span className="text-right">权重</span>
-          <span className="text-right">判定</span>
+          <span className="text-center">{t("common.col.index")}</span>
+          <span>{t("common.col.indicator")}</span>
+          <span>{t("common.col.readout")}</span>
+          <span>{t("common.col.direction")}</span>
+          <span className="text-right">{t("common.col.weight")}</span>
+          <span className="text-right">{t("common.col.verdict")}</span>
         </div>
 
         {analysis.indicators.map((ind, i) => {
-          const v = verdictOf(ind.score)
+          const v = verdictOfScore(ind.score)
+          const cls =
+            v.tone === "bull"
+              ? v.level === "long"
+                ? "border-transparent bg-up text-up-foreground"
+                : "border-up text-up"
+              : v.tone === "bear"
+                ? v.level === "short"
+                  ? "border-transparent bg-down text-down-foreground"
+                  : "border-down text-down"
+                : "text-muted-foreground"
           return (
             <div
               key={ind.key}
@@ -63,20 +62,20 @@ export const IndicatorBreakdown = memo(function IndicatorBreakdown({ analysis }:
               </span>
 
               <div className="order-1 col-span-2 flex min-w-0 flex-col gap-0.5 lg:order-2 lg:col-span-1">
-                <span className="truncate text-sm font-semibold">{ind.name}</span>
+                <span className="truncate text-sm font-semibold">{tm(ind.name)}</span>
                 <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  {kindLabel[ind.kind]}
+                  {t(kindLabel[ind.kind])}
                 </span>
               </div>
 
               <span className="order-3 font-mono text-sm font-semibold tabular lg:order-3 lg:text-right">
-                {ind.display}
+                {tm(ind.display)}
               </span>
 
               <div className="order-4 col-span-2 flex flex-col gap-1 lg:order-4 lg:col-span-1">
                 <DivergingBar score={ind.score} />
                 <span className="hidden text-[10px] leading-none text-muted-foreground lg:block">
-                  {ind.verdict}
+                  {tm(ind.verdict)}
                 </span>
               </div>
 
@@ -85,13 +84,13 @@ export const IndicatorBreakdown = memo(function IndicatorBreakdown({ analysis }:
                 <span className="font-mono text-[10px] text-muted-foreground lg:order-5 lg:text-right lg:text-xs">
                   {((ind.weight / wSum) * 100).toFixed(0)}%
                 </span>
-                <Badge variant="outline" className={cn("lg:order-6 lg:justify-self-end", v.cls)}>
-                  {v.text}
+                <Badge variant="outline" className={cn("lg:order-6 lg:justify-self-end", cls)}>
+                  {t(SCORE_LEVEL_KEY[v.level])}
                 </Badge>
               </div>
 
               <span className="order-6 col-span-2 text-[11px] leading-relaxed text-muted-foreground lg:hidden">
-                {ind.verdict}
+                {tm(ind.verdict)}
               </span>
             </div>
           )

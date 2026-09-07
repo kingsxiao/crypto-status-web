@@ -1,36 +1,28 @@
 import { memo } from "react"
+import { Scale } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardKicker } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { SignalGauge } from "@/components/Gauge"
 import { stanceStyle } from "@/components/stance-style"
-import type { Verdict } from "@/lib/crossAsset"
+import { t, useT } from "@/i18n"
+import { headlineText, themeText, type Verdict } from "@/lib/crossAsset"
 
 /** 每日市场立场：五档判定 + 综合分仪表 + 置信度 + 规则化标题 */
 export const VerdictCard = memo(function VerdictCard({ verdict }: { verdict: Verdict }) {
+  useT()
   const style = stanceStyle[verdict.stance]
 
   return (
     <Card className="relative h-full overflow-hidden border-border/80">
       <CardHeader className="pb-0">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-            每日市场立场
-          </CardTitle>
-          <Badge variant="outline" className="font-mono text-[10px] tracking-wider text-muted-foreground">
-            DAILY VERDICT
-          </Badge>
-        </div>
-        <CardDescription className="text-xs">
-          跨资产指标加权合成，五档风险偏好判定 · {verdict.date}
-        </CardDescription>
+        <CardKicker
+          icon={Scale}
+          title={t("vc.title")}
+          en="DAILY VERDICT"
+          desc={t("vc.desc", { date: verdict.date })}
+        />
       </CardHeader>
 
       <CardContent className="flex flex-col items-center gap-4">
@@ -47,14 +39,14 @@ export const VerdictCard = memo(function VerdictCard({ verdict }: { verdict: Ver
             variant="outline"
             className={`mt-1 px-3 py-1 text-base font-bold tracking-[0.2em] ${style.cls}`}
           >
-            {style.text}
+            {style.text()}
           </Badge>
         </div>
 
         {/* 置信度：方向一致度 × 综合分强度 */}
         <div className="w-full space-y-1.5">
           <div className="flex items-center justify-between text-[10px] uppercase tracking-widest text-muted-foreground">
-            <span>置信度 CONFIDENCE</span>
+            <span>{t("vc.confidence")}</span>
             <span className="font-mono text-xs font-semibold text-foreground">
               {(verdict.confidence * 100).toFixed(0)}%
             </span>
@@ -70,12 +62,12 @@ export const VerdictCard = memo(function VerdictCard({ verdict }: { verdict: Ver
         <Separator className="w-full" />
 
         <div className="w-full space-y-2">
-          <p className="text-left text-sm font-semibold leading-relaxed">{verdict.headline}</p>
+          <p className="text-left text-sm font-semibold leading-relaxed">{headlineText(verdict.headline)}</p>
           <ul className="space-y-1.5">
-            {verdict.themes.map((t) => (
-              <li key={t} className="flex gap-2 text-left text-xs leading-relaxed text-muted-foreground">
+            {verdict.themes.map((th, i) => (
+              <li key={i} className="flex gap-2 text-left text-xs leading-relaxed text-muted-foreground">
                 <span className="mt-1 size-1 shrink-0 rounded-full bg-primary/70" />
-                {t}
+                {themeText(th)}
               </li>
             ))}
           </ul>

@@ -1,15 +1,25 @@
 import { useMemo, useState } from "react"
-import { ArrowLeftRight } from "lucide-react"
+import { Bitcoin, ChevronDown, DollarSign } from "lucide-react"
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHead, CardHeader } from "@/components/ui/card"
 import { PageHeader } from "@/components/layout/PageHeader"
+import { IconChip } from "@/components/ui/icon-chip"
 import { Input } from "@/components/ui/input"
 import { SkeletonCard, SkPageHeader } from "@/components/loading"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { AssetCell, LivePrice } from "@/components/price-cells"
 import { useLive, useMarket } from "@/context/MarketDataContext"
+import { t, useT } from "@/i18n"
 import { usePageMeta } from "@/hooks/usePageMeta"
 import { formatPrice } from "@/lib/format"
-import { cn } from "@/lib/utils"
 
 /** 自适应位数的数量格式化：大数带千分位，小数最多 8 位有效 */
 function formatAmount(v: number): string {
@@ -33,7 +43,7 @@ function CoinSelect({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        aria-label="选择币种"
+        aria-label={t("coin.selectLabel")}
         className="h-11 w-full appearance-none rounded-md border border-input bg-background px-3 pr-8 font-mono text-sm font-semibold uppercase outline-none transition-colors focus-visible:border-foreground/60 focus-visible:ring-2 focus-visible:ring-ring/30"
       >
         {options.map((c) => (
@@ -42,7 +52,7 @@ function CoinSelect({
           </option>
         ))}
       </select>
-      <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground">▾</span>
+      <ChevronDown className="pointer-events-none absolute top-1/2 right-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
     </div>
   )
 }
@@ -50,7 +60,8 @@ function CoinSelect({
 const QUICK = [0.1, 0.5, 1, 10, 100]
 
 export function ConverterPage() {
-  usePageMeta({ title: "换算器 · CRYPTO STATUS" })
+  useT()
+  usePageMeta({ title: t("meta.converter") })
   const { snapshot, loading } = useMarket()
   const tickers = useLive()
 
@@ -126,27 +137,31 @@ export function ConverterPage() {
     <main className="mx-auto w-full max-w-5xl flex-1 space-y-4 px-4 pb-20 pt-6 sm:px-6">
       <PageHeader
         en="Converter"
-        title="换算器"
-        description="基于实时价格 · WebSocket 实时推送（退化为快照价格）"
+        title={t("page.converter.title")}
+        description={t("page.converter.desc")}
       />
 
-      <div className="fade-up grid gap-4 md:grid-cols-2" style={{ animationDelay: "60ms" }}>
+      <div className="fade-up grid items-stretch gap-4 md:grid-cols-2" style={{ animationDelay: "60ms" }}>
         {/* 加密货币 → USD */}
-        <Card>
+        <Card className="h-full">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <span className={cn("flex size-6 items-center justify-center rounded-md border")}>
-                <ArrowLeftRight className="size-3.5" />
-              </span>
-              加密货币 → 美元
-            </CardTitle>
-            <CardDescription>输入数量，按实时价格折算 USD</CardDescription>
+            <CardHead
+              title={
+                <span className="flex items-center gap-2.5">
+                  <IconChip className="border-primary/30 bg-primary/10 text-primary">
+                    <Bitcoin />
+                  </IconChip>
+                  {t("cv.crypto2usd")}
+                </span>
+              }
+              desc={t("cv.crypto2usdDesc")}
+            />
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="flex flex-1 flex-col gap-4">
             <div className="grid grid-cols-[1fr_1fr] gap-2">
               <div>
                 <label className="mb-1 block font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
-                  数量
+                  {t("cv.amount")}
                 </label>
                 <Input
                   inputMode="decimal"
@@ -158,7 +173,7 @@ export function ConverterPage() {
               </div>
               <div>
                 <label className="mb-1 block font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
-                  币种
+                  {t("cv.asset")}
                 </label>
                 <CoinSelect value={cryptoId} onChange={setCryptoId} options={options} />
               </div>
@@ -177,9 +192,9 @@ export function ConverterPage() {
               ))}
             </div>
 
-            <div className="rounded-lg bg-secondary/60 p-4">
+            <div className="mt-auto rounded-lg bg-secondary/60 p-4">
               <div className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
-                ≈ 美元 USD
+                {t("cv.approxUsd")}
               </div>
               <div className="mt-1 font-mono text-3xl font-bold tabular break-all">
                 {usdResult != null ? `$${formatPrice(usdResult)}` : "—"}
@@ -194,21 +209,25 @@ export function ConverterPage() {
         </Card>
 
         {/* USD → 加密货币 */}
-        <Card>
+        <Card className="h-full">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <span className="flex size-6 items-center justify-center rounded-md border">
-                <span className="font-mono text-[11px] font-bold">$</span>
-              </span>
-              美元 → 加密货币
-            </CardTitle>
-            <CardDescription>输入 USD 金额，折算能得到多少币</CardDescription>
+            <CardHead
+              title={
+                <span className="flex items-center gap-2.5">
+                  <IconChip className="border-primary/30 bg-primary/10 text-primary">
+                    <DollarSign />
+                  </IconChip>
+                  {t("cv.usd2crypto")}
+                </span>
+              }
+              desc={t("cv.usd2cryptoDesc")}
+            />
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="flex flex-1 flex-col gap-4">
             <div className="grid grid-cols-[1fr_1fr] gap-2">
               <div>
                 <label className="mb-1 block font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
-                  金额 USD
+                  {t("cv.usdAmount")}
                 </label>
                 <Input
                   inputMode="decimal"
@@ -220,7 +239,7 @@ export function ConverterPage() {
               </div>
               <div>
                 <label className="mb-1 block font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
-                  目标币种
+                  {t("cv.targetAsset")}
                 </label>
                 <CoinSelect value={usdTargetId} onChange={setUsdTargetId} options={options} />
               </div>
@@ -239,9 +258,9 @@ export function ConverterPage() {
               ))}
             </div>
 
-            <div className="rounded-lg bg-secondary/60 p-4">
+            <div className="mt-auto rounded-lg bg-secondary/60 p-4">
               <div className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
-                ≈ {targetCoin ? targetCoin.symbol.toUpperCase() : "币"}
+                ≈ {targetCoin ? targetCoin.symbol.toUpperCase() : t("cv.coinFallback")}
               </div>
               <div className="mt-1 font-mono text-3xl font-bold tabular break-all">
                 {coinResult != null ? formatAmount(coinResult) : "—"}
@@ -256,8 +275,62 @@ export function ConverterPage() {
         </Card>
       </div>
 
+      {/* 快速换算参考：填充页面下部留白，提供常用面额速查 */}
+      <Card className="fade-up" style={{ animationDelay: "120ms" }}>
+        <CardHeader>
+          <CardHead title={t("cv.quickTitle")} desc={t("cv.quickDesc")}>
+            <span className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
+              <span className="live-dot size-1.5 rounded-full bg-primary" />
+              LIVE
+            </span>
+          </CardHead>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>{t("common.col.asset")}</TableHead>
+                <TableHead className="text-right">{t("cv.col.livePrice")}</TableHead>
+                <TableHead className="hidden text-right sm:table-cell">{t("cv.col.unitUsd")}</TableHead>
+                <TableHead className="text-right">{t("cv.col.per1000")}</TableHead>
+                <TableHead className="hidden text-right md:table-cell">24H</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {coins.slice(0, 10).map((c) => {
+                const p = tickers[c.id]?.price ?? c.current_price
+                const chg = tickers[c.id]?.changePct ?? c.price_change_percentage_24h_in_currency
+                return (
+                  <TableRow key={c.id} className="hover:bg-transparent">
+                    <TableCell>
+                      <AssetCell coin={c} />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {tickers[c.id] ? <LivePrice price={p} /> : (
+                        <span className="font-mono font-semibold tabular">${formatPrice(p)}</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="hidden text-right font-mono text-xs tabular text-muted-foreground sm:table-cell">
+                      ${formatPrice(p)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm font-semibold tabular">
+                      {p > 0 ? formatAmount(1000 / p) : "—"}
+                    </TableCell>
+                    <TableCell className={`hidden text-right text-xs md:table-cell ${chg == null ? "" : chg >= 0 ? "text-up" : "text-down"}`}>
+                      <span className="font-mono tabular">
+                        {chg == null ? "—" : `${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%`}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
       <p className="fade-up text-center text-[10px] text-muted-foreground" style={{ animationDelay: "120ms" }}>
-        价格来自公开交易所实时行情，未包含任何交易手续费与滑点，结果仅供参考。
+        {t("cv.disclaimer")}
       </p>
     </main>
   )

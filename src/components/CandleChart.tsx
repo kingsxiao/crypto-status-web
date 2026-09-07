@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 
+import { t, useT } from "@/i18n"
 import type { Candle } from "@/lib/kline"
 import { bollSeries, kdjSeries, macdSeries, rsiSeries, smaSeries } from "@/lib/ta"
 
@@ -302,6 +303,7 @@ const ChartLayers = memo(function ChartLayers({
 })
 
 export const CandleChart = memo(function CandleChart({ candles, renderMode, overlays, panes, intervalKey }: Props) {
+  useT()
   const wrapRef = useRef<HTMLDivElement>(null)
   const [w, setW] = useState(860)
   const [hover, setHover] = useState<{ idx: number; x: number; y: number } | null>(null)
@@ -427,7 +429,7 @@ export const CandleChart = memo(function CandleChart({ candles, renderMode, over
   if (!model) {
     return (
       <div ref={wrapRef} className="flex h-72 items-center justify-center text-xs text-muted-foreground">
-        数据不足，无法绘制图表
+        {t("candle.insufficient")}
       </div>
     )
   }
@@ -445,16 +447,16 @@ export const CandleChart = memo(function CandleChart({ candles, renderMode, over
       {/* 读数条 */}
       <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] leading-none">
         <span className="text-muted-foreground">
-          开 <span className={cur.close >= cur.open ? "text-up" : "text-down"}>{fmtNum(cur.open)}</span>
+          {t("candle.open")} <span className={cur.close >= cur.open ? "text-up" : "text-down"}>{fmtNum(cur.open)}</span>
         </span>
         <span className="text-muted-foreground">
-          高 <span className={cur.close >= cur.open ? "text-up" : "text-down"}>{fmtNum(cur.high)}</span>
+          {t("candle.high")} <span className={cur.close >= cur.open ? "text-up" : "text-down"}>{fmtNum(cur.high)}</span>
         </span>
         <span className="text-muted-foreground">
-          低 <span className={cur.close >= cur.open ? "text-up" : "text-down"}>{fmtNum(cur.low)}</span>
+          {t("candle.low")} <span className={cur.close >= cur.open ? "text-up" : "text-down"}>{fmtNum(cur.low)}</span>
         </span>
         <span className="text-muted-foreground">
-          收 <span className={cur.close >= cur.open ? "text-up" : "text-down"}>{fmtNum(cur.close)}</span>
+          {t("candle.close")} <span className={cur.close >= cur.open ? "text-up" : "text-down"}>{fmtNum(cur.close)}</span>
         </span>
         <span className={curChange >= 0 ? "text-up" : "text-down"}>
           {curChange >= 0 ? "+" : ""}
@@ -462,7 +464,7 @@ export const CandleChart = memo(function CandleChart({ candles, renderMode, over
         </span>
         {cur.volume != null && (
           <span className="text-muted-foreground">
-            量 <span className="text-foreground">${(cur.volume / 1e6).toFixed(1)}M</span>
+            {t("candle.volume")} <span className="text-foreground">${(cur.volume / 1e6).toFixed(1)}M</span>
           </span>
         )}
         {overlays.ma && (
@@ -476,10 +478,10 @@ export const CandleChart = memo(function CandleChart({ candles, renderMode, over
         )}
         {model.boll && (
           <span className="text-muted-foreground">
-            BOLL 上<span className="ml-0.5 text-foreground">{seriesAt(model.boll.upper)?.toFixed(1) ?? "—"}</span>
-            <span className="mx-1.5">中</span>
+            BOLL {t("candle.boll.upper")}<span className="ml-0.5 text-foreground">{seriesAt(model.boll.upper)?.toFixed(1) ?? "—"}</span>
+            <span className="mx-1.5">{t("candle.boll.mid")}</span>
             <span className="text-foreground">{seriesAt(model.boll.mid)?.toFixed(1) ?? "—"}</span>
-            <span className="mx-1.5">下</span>
+            <span className="mx-1.5">{t("candle.boll.lower")}</span>
             <span className="text-foreground">{seriesAt(model.boll.lower)?.toFixed(1) ?? "—"}</span>
           </span>
         )}
@@ -513,7 +515,7 @@ export const CandleChart = memo(function CandleChart({ candles, renderMode, over
         onMouseMove={onMove}
         onMouseLeave={() => setHover(null)}
         role="img"
-        aria-label="K线图"
+        aria-label={t("candle.aria")}
       >
         <ChartLayers
           candles={candles}
