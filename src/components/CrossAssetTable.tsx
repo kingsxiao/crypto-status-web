@@ -6,7 +6,6 @@ import { DivergingBar } from "@/components/Gauge"
 import { joinList, t, tm, useT } from "@/i18n"
 import { DOMAIN_KEY, type CrossIndicator, type Verdict } from "@/lib/crossAsset"
 import { SCORE_LEVEL_KEY, verdictOfScore } from "@/lib/coinAnalysis"
-import { cn } from "@/lib/utils"
 
 /** 跨资产指标表：读数 / 方向 / 权重 / 判定 / 阈值依据，完整披露推导过程 */
 export const CrossAssetTable = memo(function CrossAssetTable({
@@ -35,7 +34,7 @@ export const CrossAssetTable = memo(function CrossAssetTable({
     return (
       <div
         key={ind.key}
-        className="grid grid-cols-2 items-center gap-x-4 gap-y-2 rounded-lg border border-transparent px-4 py-3.5 transition-colors hover:border-border hover:bg-secondary/40 lg:grid-cols-[24px_minmax(140px,1.1fr)_minmax(130px,1fr)_minmax(130px,1.5fr)_64px_72px] lg:gap-4"
+        className="grid grid-cols-2 items-center gap-x-4 gap-y-2 rounded-lg border border-transparent px-4 py-3.5 transition-colors hover:border-border hover:bg-secondary/40 lg:grid-cols-[28px_minmax(150px,1.1fr)_minmax(120px,0.9fr)_minmax(140px,1fr)_minmax(200px,1.6fr)_minmax(96px,0.6fr)] lg:gap-4"
       >
         <span className="order-1 hidden font-mono text-xs text-muted-foreground lg:block lg:text-center">
           {String(i + 1).padStart(2, "0")}
@@ -63,11 +62,12 @@ export const CrossAssetTable = memo(function CrossAssetTable({
           {tm(ind.rationale)}
         </span>
 
-        <div className="order-5 flex items-center justify-end gap-2 lg:contents">
+        {/* 权重 + 判定：移动端与读数同行，桌面端独占末列（保持 6 项对齐 6 轨，避免 contents 破坏列序） */}
+        <div className="order-3 flex items-center justify-end gap-2 lg:order-6">
           <span className="font-mono text-[10px] text-muted-foreground lg:text-right lg:text-xs">
             {((ind.weight / wSum) * 100).toFixed(0)}%
           </span>
-          <Badge variant="outline" className={cn("lg:justify-self-end", cls)}>
+          <Badge variant="outline" className={cls}>
             {t(SCORE_LEVEL_KEY[v.level])}
           </Badge>
         </div>
@@ -92,7 +92,7 @@ export const CrossAssetTable = memo(function CrossAssetTable({
       </CardHeader>
 
       <CardContent className="space-y-1">
-        <div className="hidden grid-cols-[24px_minmax(140px,1.1fr)_minmax(130px,1fr)_minmax(130px,1.5fr)_64px_72px] items-center gap-4 px-4 pb-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground lg:grid">
+        <div className="hidden grid-cols-[28px_minmax(150px,1.1fr)_minmax(120px,0.9fr)_minmax(140px,1fr)_minmax(200px,1.6fr)_minmax(96px,0.6fr)] items-center gap-4 px-4 pb-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground lg:grid">
           <span className="text-center">{t("common.col.index")}</span>
           <span>{t("common.col.indicator")}</span>
           <span className="text-right">{t("common.col.readout")}</span>
