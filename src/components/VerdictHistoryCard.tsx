@@ -99,7 +99,12 @@ export const VerdictHistoryCard = memo(function VerdictHistoryCard({
                   >
                     {style.text()}
                   </Badge>
-                  <span className="hidden min-w-0 flex-1 truncate text-[11px] text-muted-foreground sm:block">
+                  {/* w-0：截断型 flex item 的 min-content 贡献归零，避免窄容器被长标题撑破；
+                      xl 起卡宽足够才展示 headline，更窄时保留日期/立场/涨跌/评分核心信息 */}
+                  <span
+                    className="hidden min-w-0 w-0 flex-1 truncate text-[11px] text-muted-foreground xl:block"
+                    title={headlineText(r.headline)}
+                  >
                     {headlineText(r.headline)}
                   </span>
                   <span

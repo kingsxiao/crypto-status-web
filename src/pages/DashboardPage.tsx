@@ -180,9 +180,9 @@ export function DashboardPage() {
         description={t("page.dashboard.desc")}
       />
 
-      {/* 第一屏：信号 / 牛熊 / 情绪 */}
+      {/* 第一屏：信号 / 牛熊 / 情绪（lg~xl 三卡均分放得下英文长标题，xl 起恢复 5/4/3 主次） */}
       <section className="fade-up grid gap-4 lg:grid-cols-12">
-        <div className="fade-up lg:col-span-5">
+        <div className="fade-up lg:col-span-4 xl:col-span-5">
           {analysis ? (
             <SignalCard analysis={analysis} />
           ) : (
@@ -205,7 +205,7 @@ export function DashboardPage() {
             </Card>
           )}
         </div>
-        <div className="fade-up lg:col-span-3" style={{ animationDelay: "120ms" }}>
+        <div className="fade-up lg:col-span-4 xl:col-span-3" style={{ animationDelay: "120ms" }}>
           <SentimentCard fng={snapshot.fng} />
         </div>
       </section>

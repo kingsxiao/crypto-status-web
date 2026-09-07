@@ -68,7 +68,7 @@ export function OpinionRow({ ind, index, wSum }: { ind: IndicatorResult; index: 
       </span>
 
       <div className="order-1 col-span-2 flex min-w-0 flex-col gap-0.5 @2xl:order-2 @2xl:col-span-1">
-        <span className="truncate text-sm font-semibold">{tm(ind.name)}</span>
+        <span className="truncate text-sm font-semibold" title={tm(ind.name)}>{tm(ind.name)}</span>
         <span className="text-[10px] tracking-wider text-muted-foreground uppercase">{t(kindLabel[ind.kind])}</span>
       </div>
 

@@ -37,8 +37,8 @@ export const RegimeCard = memo(function RegimeCard({ analysis }: { analysis: Ana
               {t("rg.daysPre")} <span className="font-semibold text-foreground">{regime.days}</span> {t("rg.daysPost")}
             </div>
           </div>
-          {/* 牛熊示意图：右半绿（牛）左半红（熊） */}
-          <div className="flex h-16 items-end gap-1.5" aria-hidden>
+          {/* 牛熊示意图：右半绿（牛）左半红（熊）；纯装饰，窄屏让位给状态大字 */}
+          <div className="hidden h-16 items-end gap-1.5 sm:flex" aria-hidden>
             {Array.from({ length: 9 }).map((_, i) => {
               const bullSide = i >= 4
               const h = 14 + Math.abs(i - 4) * 11
@@ -90,17 +90,17 @@ export const RegimeCard = memo(function RegimeCard({ analysis }: { analysis: Ana
           <div className="grid grid-cols-3 gap-2 border-t pt-3 text-center">
             <div>
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("rg.btcPrice")}</div>
-              <div className="font-mono text-sm font-semibold tabular">${formatPrice(btc.price)}</div>
+              <div className="font-mono text-[13px] font-semibold tabular">${formatPrice(btc.price)}</div>
             </div>
             <div>
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">MA50</div>
-              <div className="font-mono text-sm font-semibold tabular text-muted-foreground">
+              <div className="font-mono text-[13px] font-semibold tabular text-muted-foreground">
                 {btc.ma50 ? `$${formatPrice(btc.ma50)}` : "—"}
               </div>
             </div>
             <div>
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">MA200</div>
-              <div className="font-mono text-sm font-semibold tabular text-muted-foreground">
+              <div className="font-mono text-[13px] font-semibold tabular text-muted-foreground">
                 {btc.ma200 ? `$${formatPrice(btc.ma200)}` : "—"}
               </div>
             </div>

@@ -511,7 +511,7 @@ export const CandleChart = memo(function CandleChart({ candles, renderMode, over
       <svg
         width={w}
         height={chartH}
-        className="block cursor-crosshair"
+        className="block max-w-full cursor-crosshair"
         onMouseMove={onMove}
         onMouseLeave={() => setHover(null)}
         role="img"

@@ -187,7 +187,7 @@ export function CoinDetail({ coin, live, onBack }: Props) {
                 <Badge variant="secondary" className="font-mono text-[10px] uppercase">{coin.symbol}</Badge>
                 <span className="font-mono text-[10px] text-muted-foreground">#{coin.market_cap_rank}</span>
               </div>
-              <div className="mt-1 flex items-baseline gap-3">
+              <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <span className="font-mono text-3xl font-bold tabular leading-none">${formatPrice(livePrice)}</span>
                 <span
                   className={cn(

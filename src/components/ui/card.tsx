@@ -2,6 +2,7 @@ import * as React from "react"
 import type { LucideIcon } from "lucide-react"
 
 import { IconChip } from "@/components/ui/icon-chip"
+import { useLocale } from "@/i18n"
 import { cn } from "@/lib/utils"
 
 function Card({ className, ...props }: React.ComponentProps<"div">) {
@@ -99,17 +100,21 @@ function CardKicker({
   icon?: LucideIcon
   className?: string
 }) {
+  // 英文界面下 en 角标多与标题重复（如 "Market Regime" / "MARKET REGIME"），
+  // 与 Header 导航角标同策略：仅中文界面显示，也避免窄卡片标题被挤截断
+  const { locale } = useLocale()
+  const showEn = locale === "zh"
   return (
     <div className={cn("min-w-0", className)}>
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-2.5">
         <div className="flex min-w-0 items-center gap-2.5">
           {Icon && <IconChip><Icon /></IconChip>}
-          <CardTitle className="truncate text-[13px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          <CardTitle className="truncate text-[13px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             {title}
           </CardTitle>
         </div>
-        {en && (
-          <span className="shrink-0 font-mono text-[10px] tracking-[0.2em] text-muted-foreground/60">
+        {en && showEn && (
+          <span className="shrink-0 font-mono text-[10px] tracking-[0.18em] text-muted-foreground/60">
             {en}
           </span>
         )}

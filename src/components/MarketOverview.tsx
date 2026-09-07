@@ -55,20 +55,20 @@ export const MarketOverview = memo(function MarketOverview({ global }: { global:
 
   return (
     <Card className="py-0">
-      <CardContent className="grid grid-cols-2 md:grid-cols-4 md:divide-x md:divide-border/60 md:py-0">
+      <CardContent className="grid grid-cols-2 px-0 md:grid-cols-4 md:divide-x md:divide-border/60 md:py-0">
         {items.map((it, i) => (
           <div
             key={it.label}
             className={cn(
-              "flex flex-col gap-2 px-5 py-5",
+              "flex flex-col gap-2 px-4 py-5 md:px-5",
               // 移动端 2×2 手动补分隔线（md 起由 divide-x 接管）
               i % 2 === 1 && "border-l border-border/60 md:border-l-0",
               i >= 2 && "border-t border-border/60 md:border-t-0",
             )}
           >
-            <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+            <div className="flex min-w-0 items-center gap-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
               <IconChip><it.icon strokeWidth={2} /></IconChip>
-              {it.label}
+              <span className="truncate" title={it.label}>{it.label}</span>
             </div>
             <div className="font-mono text-xl font-bold tabular">{it.value}</div>
             <div

@@ -34,14 +34,14 @@ export const CrossAssetTable = memo(function CrossAssetTable({
     return (
       <div
         key={ind.key}
-        className="grid grid-cols-2 items-center gap-x-4 gap-y-2 rounded-lg border border-transparent px-4 py-3.5 transition-colors hover:border-border hover:bg-secondary/40 lg:grid-cols-[28px_minmax(150px,1.1fr)_minmax(120px,0.9fr)_minmax(140px,1fr)_minmax(200px,1.6fr)_minmax(96px,0.6fr)] lg:gap-4"
+        className="grid grid-cols-2 items-center gap-x-4 gap-y-2 rounded-lg border border-transparent px-4 py-3.5 transition-colors hover:border-border hover:bg-secondary/40 lg:grid-cols-[28px_minmax(190px,1.1fr)_minmax(120px,0.9fr)_minmax(140px,1fr)_minmax(200px,1.6fr)_minmax(96px,0.6fr)] lg:gap-4"
       >
         <span className="order-1 hidden font-mono text-xs text-muted-foreground lg:block lg:text-center">
           {String(i + 1).padStart(2, "0")}
         </span>
 
         <div className="order-1 col-span-2 flex min-w-0 flex-col gap-0.5 lg:order-2 lg:col-span-1">
-          <span className="truncate text-sm font-semibold">{tm(ind.name)}</span>
+          <span className="truncate text-sm font-semibold" title={tm(ind.name)}>{tm(ind.name)}</span>
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
             {t(DOMAIN_KEY[ind.domain])}
           </span>
@@ -92,7 +92,7 @@ export const CrossAssetTable = memo(function CrossAssetTable({
       </CardHeader>
 
       <CardContent className="space-y-1">
-        <div className="hidden grid-cols-[28px_minmax(150px,1.1fr)_minmax(120px,0.9fr)_minmax(140px,1fr)_minmax(200px,1.6fr)_minmax(96px,0.6fr)] items-center gap-4 px-4 pb-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground lg:grid">
+        <div className="hidden grid-cols-[28px_minmax(190px,1.1fr)_minmax(120px,0.9fr)_minmax(140px,1fr)_minmax(200px,1.6fr)_minmax(96px,0.6fr)] items-center gap-4 px-4 pb-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground lg:grid">
           <span className="text-center">{t("common.col.index")}</span>
           <span>{t("common.col.indicator")}</span>
           <span className="text-right">{t("common.col.readout")}</span>
