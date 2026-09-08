@@ -1,6 +1,7 @@
 import {
   ArrowLeftRight,
   BellRing,
+  CalendarClock,
   Gauge,
   Info,
   LayoutDashboard,
@@ -15,6 +16,7 @@ export const NAV_ITEMS = [
   { to: "/markets", key: "nav.markets", en: "MARKETS", icon: Table2 },
   { to: "/sentiment", key: "nav.sentiment", en: "SENTIMENT", icon: Gauge },
   { to: "/verdict", key: "nav.verdict", en: "VERDICT", icon: Scale },
+  { to: "/events", key: "nav.events", en: "EVENTS", icon: CalendarClock },
   { to: "/converter", key: "nav.converter", en: "CONVERTER", icon: ArrowLeftRight },
   { to: "/portfolio", key: "nav.portfolio", en: "PORTFOLIO", icon: Wallet },
   { to: "/alerts", key: "nav.alerts", en: "ALERTS", icon: BellRing },

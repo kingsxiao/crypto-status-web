@@ -27,6 +27,7 @@ const VerdictPage = lazy(() => import("@/pages/VerdictPage").then((m) => ({ defa
 const ConverterPage = lazy(() => import("@/pages/ConverterPage").then((m) => ({ default: m.ConverterPage })))
 const PortfolioPage = lazy(() => import("@/pages/PortfolioPage").then((m) => ({ default: m.PortfolioPage })))
 const AlertsPage = lazy(() => import("@/pages/AlertsPage").then((m) => ({ default: m.AlertsPage })))
+const EventsPage = lazy(() => import("@/pages/EventsPage").then((m) => ({ default: m.EventsPage })))
 const AboutPage = lazy(() => import("@/pages/AboutPage").then((m) => ({ default: m.AboutPage })))
 
 /** 路由切换后回到页面顶部；首屏渲染完成后空闲预取常用路由 chunk */
@@ -97,6 +98,7 @@ export default function App() {
               <Route path="/converter" element={<ConverterPage />} />
               <Route path="/portfolio" element={<PortfolioPage />} />
               <Route path="/alerts" element={<AlertsPage />} />
+              <Route path="/events" element={<EventsPage />} />
               <Route path="/about" element={<AboutPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

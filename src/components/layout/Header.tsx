@@ -169,6 +169,10 @@ export function Header() {
   const feed = feedText(feedStatus, !!error)
   // 英文界面下主导航的 EN 小角标与译文重复，隐藏
   const showEnTag = locale === "zh"
+  // 九项导航：中文标签 1280(xl) 刚好放下；英文词长 2-3 倍，xl 会把右侧控件挤出
+  // 视口（实测 1536 仍溢出 37px），英文界面桌面导航升到 2xl，区间交给汉堡菜单
+  const navShow = locale === "en" ? "2xl:flex" : "xl:flex"
+  const burgerShow = locale === "en" ? "2xl:hidden" : "xl:hidden"
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-md">
@@ -185,8 +189,8 @@ export function Header() {
           </div>
         </NavLink>
 
-        {/* 桌面端导航菜单：xl 起显示，lg~xl 区间六个菜单项放不下，交给汉堡菜单 */}
-        <nav className="hidden items-center gap-1 xl:flex" aria-label={t("hdr.nav")}>
+        {/* 桌面端导航菜单：中文 xl 起、英文 2xl 起显示；放不下的区间交给汉堡菜单 */}
+        <nav className={cn("hidden items-center gap-0.5", navShow)} aria-label={t("hdr.nav")}>
           {NAV_ITEMS.map(({ to, key, icon: Icon }) => (
             <NavLink
               key={to}
@@ -196,7 +200,8 @@ export function Header() {
               onFocus={() => prefetchRoute(to)}
               className={({ isActive }) =>
                 cn(
-                  "flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] transition-colors",
+                  // px-2：九项导航在 1536(2xl) 英文界面也放得下（px-3 会溢出 37px）
+                  "flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] transition-colors",
                   isActive
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
@@ -236,7 +241,7 @@ export function Header() {
           <Button
             variant="outline"
             size="sm"
-            className="size-8 gap-0 p-0 xl:hidden"
+            className={cn("size-8 gap-0 p-0", burgerShow)}
             aria-label={menuOpen ? t("hdr.menu.close") : t("hdr.menu.open")}
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((v) => !v)}
@@ -256,7 +261,7 @@ export function Header() {
       {/* 移动端下拉菜单 */}
       {menuOpen && (
         <nav
-          className="fade-up border-t border-border/60 bg-background/95 px-4 py-3 backdrop-blur-md xl:hidden"
+          className={cn("fade-up border-t border-border/60 bg-background/95 px-4 py-3 backdrop-blur-md", burgerShow)}
           aria-label={t("hdr.mobileNav")}
         >
           <div className="mx-auto grid w-full max-w-7xl gap-1">
