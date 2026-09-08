@@ -480,13 +480,17 @@ export const CandleChart = memo(function CandleChart({ candles, renderMode, over
     return { subPanes: list, chartH: Math.max(cursorTop - PANE_GAP, AXIS_H + mainH) }
   }, [panes, mainH])
 
-  /* 十字光标：rAF 节流，坐标未变时保持原 state 引用跳过重渲染 */
-  const onMove = useCallback(
-    (e: React.MouseEvent<SVGSVGElement>) => {
+  /* 十字光标：鼠标移动 / 触屏拖动 / 键盘方向键共用一套定位；rAF 节流。
+   * hoverRef 让键盘导航能读到当前十字线位置，而不必订阅 state 造成额外渲染 */
+  const hoverRef = useRef<{ idx: number; x: number; y: number } | null>(null)
+  const applyHover = useCallback((next: { idx: number; x: number; y: number } | null) => {
+    hoverRef.current = next
+    setHover(next)
+  }, [])
+
+  const locate = useCallback(
+    (svg: SVGSVGElement, clientX: number, clientY: number) => {
       if (!model) return
-      const svg = e.currentTarget
-      const clientX = e.clientX
-      const clientY = e.clientY
       if (rafRef.current != null) return
       rafRef.current = requestAnimationFrame(() => {
         rafRef.current = null
@@ -494,14 +498,33 @@ export const CandleChart = memo(function CandleChart({ candles, renderMode, over
         const px = clientX - rect.left
         const py = clientY - rect.top
         const idx = Math.max(0, Math.min(candles.length - 1, Math.round((px - PAD_L) / model.step - 0.5)))
-        const x = model.x(idx)
-        setHover((prev) => {
-          if (prev && prev.idx === idx && Math.abs(prev.y - py) < 1) return prev
-          return { idx, x, y: py }
-        })
+        const prev = hoverRef.current
+        if (prev && prev.idx === idx && Math.abs(prev.y - py) < 1) return
+        applyHover({ idx, x: model.x(idx), y: py })
       })
     },
-    [model, candles.length]
+    [model, candles.length, applyHover]
+  )
+
+  /* 键盘导航：←→ 单根、Shift+←→ 十根、Home/End 跳首尾、Esc 关闭十字线 */
+  const onKeyDown = useCallback(
+    (e: React.KeyboardEvent<SVGSVGElement>) => {
+      if (!model) return
+      if (e.key === "Escape") {
+        applyHover(null)
+        return
+      }
+      const base = hoverRef.current?.idx ?? candles.length - 1
+      let next: number | null = null
+      if (e.key === "ArrowLeft") next = Math.max(0, base - (e.shiftKey ? 10 : 1))
+      else if (e.key === "ArrowRight") next = Math.min(candles.length - 1, base + (e.shiftKey ? 10 : 1))
+      else if (e.key === "Home") next = 0
+      else if (e.key === "End") next = candles.length - 1
+      if (next == null) return
+      e.preventDefault()
+      applyHover({ idx: next, x: model.x(next), y: hoverRef.current?.y ?? model.y(candles[next].close) })
+    },
+    [model, candles, applyHover]
   )
 
   if (!model) {
@@ -522,8 +545,11 @@ export const CandleChart = memo(function CandleChart({ candles, renderMode, over
 
   return (
     <div ref={wrapRef} className="w-full select-none">
-      {/* 读数条 */}
+      {/* 读数条：悬停/触选的K线时间打头 */}
       <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] leading-none">
+        <span className="rounded bg-secondary px-1.5 py-1 font-semibold tabular text-foreground">
+          {fmtTime(cur.time, intervalKey)}
+        </span>
         <span className="text-muted-foreground">
           {t("candle.open")} <span className={cur.close >= cur.open ? "text-up" : "text-down"}>{fmtNum(cur.open)}</span>
         </span>
@@ -589,9 +615,19 @@ export const CandleChart = memo(function CandleChart({ candles, renderMode, over
       <svg
         width={w}
         height={chartH}
-        className="block max-w-full cursor-crosshair"
-        onMouseMove={onMove}
-        onMouseLeave={() => setHover(null)}
+        className="block max-w-full cursor-crosshair rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        style={{ touchAction: "pan-y" }}
+        onPointerDown={(e) => locate(e.currentTarget, e.clientX, e.clientY)}
+        onPointerMove={(e) => locate(e.currentTarget, e.clientX, e.clientY)}
+        onPointerLeave={(e) => {
+          // 鼠标移出即隐藏；触屏抬手后保留十字线供读数，下次点按重新定位
+          if (e.pointerType === "mouse") applyHover(null)
+        }}
+        onPointerCancel={(e) => {
+          if (e.pointerType === "mouse") applyHover(null)
+        }}
+        onKeyDown={onKeyDown}
+        tabIndex={0}
         role="img"
         aria-label={t("candle.aria")}
       >
@@ -610,11 +646,29 @@ export const CandleChart = memo(function CandleChart({ candles, renderMode, over
         {hover && (
           <g pointerEvents="none">
             <line x1={crossX} x2={crossX} y1={4} y2={chartH - AXIS_H} stroke="var(--foreground)" strokeOpacity="0.4" strokeDasharray="3 3" />
-            <line x1={PAD_L} x2={w - PAD_R} y1={hover.y} y2={hover.y} stroke="var(--foreground)" strokeOpacity="0.3" strokeDasharray="3 3" />
+            {hover.y > 6 && hover.y < mainH - 2 && (
+              <line x1={PAD_L} x2={w - PAD_R} y1={hover.y} y2={hover.y} stroke="var(--foreground)" strokeOpacity="0.3" strokeDasharray="3 3" />
+            )}
             <rect x={Math.min(Math.max(crossX - 34, PAD_L), w - PAD_R - 68)} y={chartH - AXIS_H + 2} width="68" height="15" rx="3" fill="var(--popover)" />
             <text x={Math.min(Math.max(crossX - 30, PAD_L + 4), w - PAD_R - 64)} y={chartH - AXIS_H + 13} fontSize="9.5" fontWeight="600" fill="var(--popover-foreground)" fontFamily="JetBrains Mono, monospace">
               {fmtTime(cur.time, intervalKey)}
             </text>
+            {/* Y 轴价格标签：水平线落在主图价格区时，右轴标出对应价格 */}
+            {hover.y > 8 && hover.y < priceH - 8 && (
+              <g>
+                <rect x={w - PAD_R + 2} y={hover.y - 8} width={PAD_R - 4} height="16" rx="3" fill="var(--foreground)" />
+                <text
+                  x={w - PAD_R + 6}
+                  y={hover.y + 4}
+                  fontSize="10"
+                  fontWeight="700"
+                  fill="var(--background)"
+                  fontFamily="JetBrains Mono, monospace"
+                >
+                  {fmtNum(model.pMin + (1 - (hover.y - 6) / (priceH - 12)) * (model.pMax - model.pMin))}
+                </text>
+              </g>
+            )}
           </g>
         )}
       </svg>
