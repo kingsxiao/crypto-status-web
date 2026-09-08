@@ -9,6 +9,8 @@
 
 import { useEffect, useRef, useState } from "react"
 
+import { fetchJSON } from "@/lib/http"
+
 export interface LiveTicker {
   price: number
   changePct: number | null
@@ -86,8 +88,10 @@ export function useRealtime(symbols: Record<string, { binance: string; okx: stri
     }
 
     /* ---------------- 兜底：Binance REST 轮询 ---------------- */
+    let polling = false // 同步防重入：pollTimer 要等首次 poll 完成才赋值，期间可能被重复进入
     const startPolling = async () => {
-      if (disposed || pollTimer) return
+      if (disposed || pollTimer || polling) return
+      polling = true
       stage = 2
       setStatus({ mode: "polling" })
       const poll = async () => {
@@ -97,16 +101,14 @@ export function useRealtime(symbols: Record<string, { binance: string; okx: stri
           const url =
             `https://api.binance.com/api/v3/ticker/24hr?symbols=` +
             encodeURIComponent(JSON.stringify(pairs))
-          const res = await fetch(url)
-          if (!res.ok) return
-          const data = (await res.json()) as {
+          const data = await fetchJSON<{
             symbol: string
             lastPrice: string
             priceChangePercent: string
             highPrice: string
             lowPrice: string
             quoteVolume: string
-          }[]
+          }[]>(url, 10_000)
           const bySymbol = new Map(ids.map((id) => [symbols[id].binance, id]))
           for (const d of data) {
             const id = bySymbol.get(d.symbol)
@@ -125,6 +127,7 @@ export function useRealtime(symbols: Record<string, { binance: string; okx: stri
         }
       }
       await poll()
+      if (disposed) return
       pollTimer = setInterval(poll, 20_000)
     }
 
@@ -132,6 +135,14 @@ export function useRealtime(symbols: Record<string, { binance: string; okx: stri
     const startStage = () => {
       if (disposed) return
       if (stage > 1) {
+        // 进入轮询前递增代际并清掉挂起的重连：否则旧 socket 的 onclose
+        // （gen 未变、retries 刚被清零）仍会再调度一次 startStage →
+        // startPolling，与首次轮询并发产生双 interval 且其一泄漏
+        ++gen
+        if (reconnectTimer) {
+          clearTimeout(reconnectTimer)
+          reconnectTimer = null
+        }
         startPolling()
         return
       }

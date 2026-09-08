@@ -114,6 +114,50 @@ function emaSeriesFill(values: number[], period: number): number[] {
   return out
 }
 
+/** 斐波那契回撤档位（0=趋势终点，1=趋势起点，TradingView 惯例） */
+export const FIB_RATIOS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1] as const
+
+export interface AutoFib {
+  /** up=低点在先高点在后（上涨波段回撤）；down=高点在先低点在后 */
+  direction: "up" | "down"
+  startIndex: number
+  endIndex: number
+  startPrice: number
+  endPrice: number
+  levels: { ratio: number; price: number }[]
+}
+
+/**
+ * 自动斐波那契回撤：在给定K线区间内自动匹配波段起点与终点 ——
+ * 起止价取区间摆动高点 high 与摆动低点 low，出现先后决定趋势方向；
+ * 档位价格 = 终点价 − 波幅 × ratio（0% 在终点、100% 在起点）。
+ * 区间内无有效摆动（数据不足或价格持平）返回 null。
+ */
+export function autoFibonacci(candles: { high: number; low: number }[]): AutoFib | null {
+  let iH = -1
+  let iL = -1
+  let hi = -Infinity
+  let lo = Infinity
+  for (let i = 0; i < candles.length; i++) {
+    if (candles[i].high > hi) {
+      hi = candles[i].high
+      iH = i
+    }
+    if (candles[i].low < lo) {
+      lo = candles[i].low
+      iL = i
+    }
+  }
+  if (iH < 0 || iL < 0 || iH === iL || !(hi > lo)) return null
+  const direction: "up" | "down" = iL < iH ? "up" : "down"
+  const startPrice = direction === "up" ? lo : hi
+  const endPrice = direction === "up" ? hi : lo
+  const startIndex = direction === "up" ? iL : iH
+  const endIndex = direction === "up" ? iH : iL
+  const levels = FIB_RATIOS.map((ratio) => ({ ratio, price: endPrice - (endPrice - startPrice) * ratio }))
+  return { direction, startIndex, endIndex, startPrice, endPrice, levels }
+}
+
 /** KDJ（9,3,3）：返回 K / D / J */
 export function kdjSeries(highs: number[], lows: number[], closes: number[], period = 9, k = 3, d = 3) {
   const n = closes.length

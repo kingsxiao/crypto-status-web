@@ -160,10 +160,14 @@ export function ConverterPage() {
           <CardContent className="flex flex-1 flex-col gap-4">
             <div className="grid grid-cols-[1fr_1fr] gap-2">
               <div>
-                <label className="mb-1 block font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
+                <label
+                  htmlFor="cv-crypto-amount"
+                  className="mb-1 block font-mono text-[10px] tracking-wider text-muted-foreground uppercase"
+                >
                   {t("cv.amount")}
                 </label>
                 <Input
+                  id="cv-crypto-amount"
                   inputMode="decimal"
                   value={cryptoAmt}
                   onChange={(e) => setCryptoAmt(e.target.value)}
@@ -226,10 +230,14 @@ export function ConverterPage() {
           <CardContent className="flex flex-1 flex-col gap-4">
             <div className="grid grid-cols-[1fr_1fr] gap-2">
               <div>
-                <label className="mb-1 block font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
+                <label
+                  htmlFor="cv-usd-amount"
+                  className="mb-1 block font-mono text-[10px] tracking-wider text-muted-foreground uppercase"
+                >
                   {t("cv.usdAmount")}
                 </label>
                 <Input
+                  id="cv-usd-amount"
                   inputMode="decimal"
                   value={usdAmt}
                   onChange={(e) => setUsdAmt(e.target.value)}

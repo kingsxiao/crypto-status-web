@@ -2,12 +2,12 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { t, useT } from "@/i18n"
 import type { Candle } from "@/lib/kline"
-import { bollSeries, kdjSeries, macdSeries, rsiSeries, smaSeries } from "@/lib/ta"
+import { autoFibonacci, bollSeries, kdjSeries, macdSeries, rsiSeries, smaSeries, type AutoFib } from "@/lib/ta"
 
 interface Props {
   candles: Candle[]
   renderMode: "candles" | "line"
-  overlays: { ma: boolean; boll: boolean }
+  overlays: { ma: boolean; boll: boolean; fib: boolean }
   panes: { rsi: boolean; macd: boolean; kdj: boolean }
   intervalKey: string
 }
@@ -23,6 +23,7 @@ const LINE2 = "var(--chart-2)" // MA25 / RSI / KDJ-J
 const LINE3 = "var(--chart-3)" // MA99 / MACD-DIF / KDJ-D
 const LINE4 = "var(--chart-4)" // BOLL 上下轨
 const LINE5 = "var(--chart-5)" // BOLL 中轨 / MACD-DEA
+const FIB = "var(--primary)" // 斐波那契回撤
 const GRID = "var(--border)"
 const TEXT_DIM = "var(--muted-foreground)"
 
@@ -50,7 +51,9 @@ function linePath(pts: (readonly [number, number] | null)[]): string {
 const fmtTime = (t: number, itv: string) => {
   const d = new Date(t)
   const p = (n: number) => String(n).padStart(2, "0")
-  if (itv === "1h" || itv === "4h") return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:00`
+  if (itv === "1s") return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+  if (itv.endsWith("m") || itv === "1h" || itv === "4h")
+    return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
   return `${String(d.getFullYear()).slice(2)}/${p(d.getMonth() + 1)}/${p(d.getDate())}`
 }
 
@@ -59,6 +62,19 @@ const fmtNum = (v: number) => {
   const digits = abs >= 1000 ? 1 : abs >= 1 ? 2 : abs >= 0.01 ? 4 : 6
   return v.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits })
 }
+
+/* 成交量自适应单位：秒/分级 K 线单根 quote 量小到百位，固定 M 格式会缩成 0.0M */
+const fmtVol = (v: number) =>
+  v >= 1e9
+    ? `${(v / 1e9).toFixed(2)}B`
+    : v >= 1e6
+      ? `${(v / 1e6).toFixed(2)}M`
+      : v >= 1e3
+        ? `${(v / 1e3).toFixed(1)}K`
+        : v.toFixed(0)
+
+/* 斐波那契档位标签：0 → "0"、0.236 → "0.236"、0.5 → "0.5" */
+const fibRatioLabel = (r: number) => r.toFixed(3).replace(/\.?0+$/, "")
 
 interface ChartModel {
   closes: number[]
@@ -69,6 +85,7 @@ interface ChartModel {
   rsi: (number | null)[] | null
   macd: { dif: (number | null)[]; dea: (number | null)[]; hist: (number | null)[] } | null
   kdj: { k: (number | null)[]; d: (number | null)[]; j: (number | null)[] } | null
+  fib: AutoFib | null
   pMin: number
   pMax: number
   vMax: number
@@ -207,6 +224,66 @@ const ChartLayers = memo(function ChartLayers({
         </>
       )}
 
+      {/* 斐波那契回撤：区间极值自动定起止价，水平档位线向右延伸 */}
+      {model.fib && (
+        <g>
+          {(() => {
+            const f = model.fib as AutoFib
+            const x0 = model.x(Math.min(f.startIndex, f.endIndex))
+            const xRight = w - PAD_R
+            const yEnd = model.y(f.endPrice)
+            const yStart = model.y(f.startPrice)
+            return (
+              <>
+                {/* 0%~100% 区间淡填充 */}
+                <rect
+                  x={x0}
+                  y={Math.min(yStart, yEnd)}
+                  width={xRight - x0}
+                  height={Math.abs(yEnd - yStart)}
+                  fill={FIB}
+                  fillOpacity="0.045"
+                />
+                {/* 起止点连线（趋势方向）与端点标记 */}
+                <line x1={model.x(f.startIndex)} y1={yStart} x2={model.x(f.endIndex)} y2={yEnd} stroke={FIB} strokeWidth="1" strokeOpacity="0.7" strokeDasharray="5 4" />
+                <circle cx={model.x(f.startIndex)} cy={yStart} r="2.5" fill={FIB} />
+                <circle cx={model.x(f.endIndex)} cy={yEnd} r="2.5" fill={FIB} />
+                {/* 档位水平线 + 右侧标签：0/1 实线，回撤档虚线 */}
+                {f.levels.map((l) => {
+                  const edge = l.ratio === 0 || l.ratio === 1
+                  const ly = model.y(l.price)
+                  return (
+                    <g key={l.ratio}>
+                      <line
+                        x1={x0}
+                        x2={xRight}
+                        y1={ly}
+                        y2={ly}
+                        stroke={FIB}
+                        strokeWidth={edge ? 1.2 : 0.9}
+                        strokeOpacity={edge || l.ratio === 0.618 ? 0.9 : 0.55}
+                        strokeDasharray={edge ? undefined : "4 3"}
+                      />
+                      <text
+                        x={xRight - 4}
+                        y={ly - 3}
+                        fontSize="9.5"
+                        fontWeight="600"
+                        textAnchor="end"
+                        fill={FIB}
+                        fontFamily="JetBrains Mono, monospace"
+                      >
+                        {fibRatioLabel(l.ratio)} {fmtNum(l.price)}
+                      </text>
+                    </g>
+                  )
+                })}
+              </>
+            )
+          })()}
+        </g>
+      )}
+
       {/* 最新价虚线 + 涨跌色价签 */}
       <line
         x1={PAD_L}
@@ -342,6 +419,7 @@ export const CandleChart = memo(function CandleChart({ candles, renderMode, over
     const rsi = panes.rsi ? rsiSeries(closes, 14) : null
     const macd = panes.macd ? macdSeries(closes) : null
     const kdj = panes.kdj ? kdjSeries(highs, lows, closes) : null
+    const fib = overlays.fib ? autoFibonacci(candles) : null
 
     let pMin = Infinity
     let pMax = -Infinity
@@ -378,7 +456,7 @@ export const CandleChart = memo(function CandleChart({ candles, renderMode, over
     ).filter((v, i, a) => a.indexOf(v) === i)
 
     return {
-      closes, ma7, ma25, ma99, boll, rsi, macd, kdj,
+      closes, ma7, ma25, ma99, boll, rsi, macd, kdj, fib,
       pMin, pMax, vMax, step, cw, x, y, vy, priceTicks, timeTicks,
     }
   }, [candles, overlays, panes, w, priceH, volH, mainH])
@@ -464,7 +542,7 @@ export const CandleChart = memo(function CandleChart({ candles, renderMode, over
         </span>
         {cur.volume != null && (
           <span className="text-muted-foreground">
-            {t("candle.volume")} <span className="text-foreground">${(cur.volume / 1e6).toFixed(1)}M</span>
+            {t("candle.volume")} <span className="text-foreground">${fmtVol(cur.volume)}</span>
           </span>
         )}
         {overlays.ma && (

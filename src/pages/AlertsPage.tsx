@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import {
   BellPlus,
@@ -93,6 +93,14 @@ export function AlertsPage() {
   const [permTick, setPermTick] = useState(0)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [confirmClear, setConfirmClear] = useState(false)
+  // 卸载时清掉待执行的确认复位 timer，与 PortfolioPage 同一套防御
+  const deleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => {
+    if (deleteTimer.current) clearTimeout(deleteTimer.current)
+    if (clearTimer.current) clearTimeout(clearTimer.current)
+  }, [])
 
   const active = useMemo(() => alerts.filter((a) => a.status === "active"), [alerts])
   const triggered = useMemo(
@@ -152,7 +160,8 @@ export function AlertsPage() {
       setConfirmDelete(null)
     } else {
       setConfirmDelete(id)
-      setTimeout(() => setConfirmDelete((cur) => (cur === id ? null : cur)), 2600)
+      if (deleteTimer.current) clearTimeout(deleteTimer.current)
+      deleteTimer.current = setTimeout(() => setConfirmDelete((cur) => (cur === id ? null : cur)), 2600)
     }
   }
 
@@ -462,7 +471,8 @@ export function AlertsPage() {
                     setConfirmClear(false)
                   } else {
                     setConfirmClear(true)
-                    setTimeout(() => setConfirmClear(false), 2600)
+                    if (clearTimer.current) clearTimeout(clearTimer.current)
+                    clearTimer.current = setTimeout(() => setConfirmClear(false), 2600)
                   }
                 }}
                 className={cn(

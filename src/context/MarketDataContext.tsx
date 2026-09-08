@@ -74,10 +74,12 @@ export function MarketDataProvider({ children }: { children: ReactNode }) {
     return { ...snapshot.btcChart, prices }
   }, [snapshot, liveBtcSampled])
 
-  const analysis = useMemo(
-    () => (snapshot && patchedChart ? analyze(patchedChart, snapshot.fng) : null),
-    [snapshot, patchedChart]
-  )
+  const analysis = useMemo(() => {
+    if (!snapshot || !patchedChart) return null
+    // 传入 CoinGecko 全史 ATH，避免熊市里用一年窗口高点冒充历史高点
+    const btcAth = snapshot.coins.find((c) => c.id === "bitcoin")?.ath
+    return analyze(patchedChart, snapshot.fng, btcAth)
+  }, [snapshot, patchedChart])
 
   const marketValue = useMemo(
     () => ({

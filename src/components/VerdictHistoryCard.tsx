@@ -78,7 +78,7 @@ export const VerdictHistoryCard = memo(function VerdictHistoryCard({
         ) : (
           <ul className="space-y-1">
             {rows.map((r, i) => {
-              // rows 为倒序：rows[i+1] 是 r 的「次日」
+              // rows 为倒序（新在前）：rows[i-1] 才是 r 的「次日」
               const next = i > 0 ? rows[i - 1] : null
               const grade = gradeRecord(r, next)
               const isLatest = i === 0

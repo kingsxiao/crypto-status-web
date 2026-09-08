@@ -142,4 +142,25 @@ describe("analyze", () => {
     // 周期持续天数至少含当日
     expect(a!.regime.days).toBeGreaterThanOrEqual(1)
   })
+
+  it("ATH 口径：传入全史 ATH 时回撤按其计算，缺失/非正时退回窗口高点", () => {
+    const chart = chartOf(ramp(250, 100, -2)) // 单边下跌：窗口高点在起点
+    const last = 100 - 249 * 2
+    const windowMax = 100
+    const athDisplay = (...args: Parameters<typeof analyze>) => {
+      const a = analyze(...args)!
+      return a.indicators.find((i) => i.key === "ath")!.display as string
+    }
+
+    // 不传或传 0（Binance 兜底路径）→ 窗口高点
+    expect(athDisplay(chart, [])).toBe((((last - windowMax) / windowMax) * 100).toFixed(1) + "%")
+    expect(athDisplay(chart, [], 0)).toBe(athDisplay(chart, []))
+
+    // 传入更高的全史 ATH → 回撤更深
+    const athAll = 500
+    expect(athDisplay(chart, [], athAll)).toBe((((last - athAll) / athAll) * 100).toFixed(1) + "%")
+
+    // 传入低于窗口高点的 ATH（不应出现，防御）→ 仍用窗口高点
+    expect(athDisplay(chart, [], 1)).toBe(athDisplay(chart, []))
+  })
 })

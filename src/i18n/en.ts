@@ -203,6 +203,11 @@ export const en = {
   "coin.stat.vol24": "24H volume",
   "coin.stat.mcap": "Mkt cap",
   "coin.intervalLabel": "Candle interval",
+  "coin.interval.1s": "1s",
+  "coin.interval.1m": "1m",
+  "coin.interval.5m": "5m",
+  "coin.interval.15m": "15m",
+  "coin.interval.30m": "30m",
   "coin.interval.1h": "1H",
   "coin.interval.4h": "4H",
   "coin.interval.1d": "1D",
@@ -221,6 +226,7 @@ export const en = {
   "coin.render.candle": "Candlestick mode",
   "coin.loadFail": "Failed to load candle data",
   "coin.loadFailFallback": "Failed to load candles",
+  "coin.noChart": "No exchange candle data for this coin yet",
   "coin.opinionTitle": "{name} Bull-Bear Opinion",
   "coin.opinionDesc": "Weighted blend of 8 daily indicators with the live price included · bear left, bull right",
   "coin.opinionBadge": "{n} indicators · Daily",
@@ -588,6 +594,7 @@ export const en = {
   "common.save": "Save",
   "common.cancel": "Cancel",
   "common.delete": "Delete",
+  "common.close": "Close",
   "common.edit": "Edit",
 
   /* ------------------------------ Portfolio / Alerts nav ------------------------------ */

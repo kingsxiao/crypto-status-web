@@ -182,7 +182,13 @@ export function scoreAthPosition(drawdownPct: number) {
 
 /* -------------------------------- 主分析 -------------------------------- */
 
-export function analyze(btcChart: MarketChart, fng: FearGreedEntry[]): Analysis | null {
+/**
+ * 主分析。`athFromSnapshot` 为 CoinGecko 的全史 ATH（快照里 BTC 条目）：
+ * 标签承诺的是「距历史高点」，仅用一年窗口最大值在 ATH 早于窗口时
+ * （周期顶后的漫长熊市）会显著低估回撤；字段缺失（Binance 兜底路径为 0）
+ * 时自动退回窗口高点。
+ */
+export function analyze(btcChart: MarketChart, fng: FearGreedEntry[], athFromSnapshot?: number): Analysis | null {
   const prices = btcChart.prices.map(([, p]) => p)
   if (prices.length < 210) return null
 
@@ -198,7 +204,8 @@ export function analyze(btcChart: MarketChart, fng: FearGreedEntry[]): Analysis 
   const chg30 = ((price - prices[prices.length - 31]) / prices[prices.length - 31]) * 100
 
   const latestFng = fng[0]?.value ?? null
-  const ath = Math.max(...prices)
+  const windowMax = Math.max(...prices)
+  const ath = athFromSnapshot && athFromSnapshot > 0 ? Math.max(athFromSnapshot, windowMax) : windowMax
   const drawdown = ((price - ath) / ath) * 100
 
   /* 牛熊周期判定（趋势结构） */

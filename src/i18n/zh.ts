@@ -201,6 +201,11 @@ export const zh = {
   "coin.stat.vol24": "24H 成交额",
   "coin.stat.mcap": "市值",
   "coin.intervalLabel": "K线周期",
+  "coin.interval.1s": "1秒",
+  "coin.interval.1m": "1分",
+  "coin.interval.5m": "5分",
+  "coin.interval.15m": "15分",
+  "coin.interval.30m": "30分",
   "coin.interval.1h": "1时",
   "coin.interval.4h": "4时",
   "coin.interval.1d": "日线",
@@ -219,6 +224,7 @@ export const zh = {
   "coin.render.candle": "蜡烛图模式",
   "coin.loadFail": "K线数据加载失败",
   "coin.loadFailFallback": "K线加载失败",
+  "coin.noChart": "该币种暂无交易所K线数据",
   "coin.opinionTitle": "{name} 多空观点",
   "coin.opinionDesc": "基于日线八项指标加权合成，实时价参与计算 · 左空右多",
   "coin.opinionBadge": "{n} 项指标 · 日线",
@@ -585,6 +591,7 @@ export const zh = {
   "common.save": "保存",
   "common.cancel": "取消",
   "common.delete": "删除",
+  "common.close": "关闭",
   "common.edit": "编辑",
 
   /* ------------------------------ 组合 / 预警导航 ------------------------------ */

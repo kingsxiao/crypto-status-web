@@ -17,7 +17,7 @@ import {
 import { LoadingDots, SkeletonCard, SkHeader, SkPageHeader, SkProgress, TableSkeleton } from "@/components/loading"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useMarket } from "@/context/MarketDataContext"
-import { t, tm, useT, type LMsg } from "@/i18n"
+import { t, tm, useT, type LMsg, type MessageKey } from "@/i18n"
 import { usePageMeta } from "@/hooks/usePageMeta"
 import {
   computeVerdict,
@@ -167,7 +167,7 @@ function VerdictSkeleton() {
 export function VerdictPage() {
   useT()
   usePageMeta({ title: t("meta.verdict") })
-  const { snapshot, loading, refresh } = useMarket()
+  const { snapshot, error, loading, refresh } = useMarket()
 
   const [cross, setCross] = useState<CrossAssetData | null>(null)
   const [crossError, setCrossError] = useState(false)
@@ -207,16 +207,45 @@ export function VerdictPage() {
     if (verdict) setHistory(upsertToday(verdict))
   }, [verdict])
 
-  const missing = useMemo(() => {
+  // 缺失源提示：memo 里存 key（与 cross 数据绑定），渲染期再取词 ——
+  // 在 memo 里直接 t() 求值的话，语言切换后不会随 cross 重取而刷新文案
+  const missingKeys = useMemo(() => {
     if (!cross) return []
-    const m: string[] = []
-    if (!cross.stablecoin) m.push(t("vp.missing.stablecoin"))
-    if (!cross.derivatives) m.push(t("vp.missing.derivatives"))
-    if (!cross.breadth) m.push(t("vp.missing.breadth"))
+    const m: MessageKey[] = []
+    if (!cross.stablecoin) m.push("vp.missing.stablecoin")
+    if (!cross.derivatives) m.push("vp.missing.derivatives")
+    if (!cross.breadth) m.push("vp.missing.breadth")
     return m
   }, [cross])
 
   if (loading) return <VerdictSkeleton />
+
+  // 快照彻底失败（主备源全挂）：必须显式报错 + 重试，
+  // 否则 snapshot 为 null 会落进下面的「跨资产加载中」过渡态永久转圈
+  if (error && !snapshot) {
+    return (
+      <main className="mx-auto flex w-full max-w-7xl flex-1 2xl:max-w-[1680px] 2xl:px-10 flex-col items-center justify-center gap-4 px-6 py-24">
+        <div className="flex size-14 items-center justify-center rounded-full border">
+          <TriangleAlert className="size-6" />
+        </div>
+        <div className="text-center">
+          <p className="font-semibold">{t("common.loadFail")}</p>
+          <p className="mt-1 font-mono text-xs text-muted-foreground">{error}</p>
+        </div>
+        <Button
+          onClick={() => {
+            refresh()
+            loadCross()
+          }}
+          variant="outline"
+          size="sm"
+          className="gap-1.5"
+        >
+          <RotateCw className="size-3.5" /> {t("common.retry")}
+        </Button>
+      </main>
+    )
+  }
 
   return (
     <main className="mx-auto w-full max-w-7xl flex-1 2xl:max-w-[1680px] 2xl:px-10 space-y-6 px-4 pb-20 pt-6 sm:px-6">
@@ -261,7 +290,7 @@ export function VerdictPage() {
 
           {/* 指标明细 */}
           <section className="fade-up" style={{ animationDelay: "160ms" }}>
-            <CrossAssetTable verdict={verdict} missing={missing} />
+            <CrossAssetTable verdict={verdict} missing={missingKeys.map((k) => t(k))} />
           </section>
 
           {/* 体量参照 + 判断历史 */}

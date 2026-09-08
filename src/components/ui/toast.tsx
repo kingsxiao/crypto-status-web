@@ -8,6 +8,7 @@ import { useSyncExternalStore } from "react"
 import { useNavigate } from "react-router-dom"
 import { BellRing, X } from "lucide-react"
 
+import { t, useT } from "@/i18n"
 import { cn } from "@/lib/utils"
 
 export interface ToastItem {
@@ -51,6 +52,7 @@ export function dismissToast(id: number) {
 
 function ToastRow({ item }: { item: ToastItem }) {
   const navigate = useNavigate()
+  useT()
   return (
     <div
       role="status"
@@ -75,7 +77,7 @@ function ToastRow({ item }: { item: ToastItem }) {
         )}
       </div>
       <button
-        aria-label="dismiss"
+        aria-label={t("common.close")}
         className="shrink-0 rounded p-0.5 text-muted-foreground/60 transition-colors hover:text-foreground"
         onClick={(e) => {
           e.stopPropagation()

@@ -1,5 +1,5 @@
 import { Link, useNavigate, useParams } from "react-router-dom"
-import { TriangleAlert } from "lucide-react"
+import { RotateCw, TriangleAlert } from "lucide-react"
 
 import { CoinDetail } from "@/components/CoinDetail"
 import { Button } from "@/components/ui/button"
@@ -12,7 +12,7 @@ import { usePageMeta } from "@/hooks/usePageMeta"
 export function CoinPage() {
   useT()
   const { id = "" } = useParams()
-  const { snapshot, loading } = useMarket()
+  const { snapshot, error, loading, refresh } = useMarket()
   const tickers = useLive()
   const navigate = useNavigate()
   const coin = snapshot?.coins.find((c) => c.id === id) ?? null
@@ -75,6 +75,24 @@ export function CoinPage() {
             ))}
           </div>
         </SkeletonCard>
+      </main>
+    )
+  }
+
+  // 快照主备源全挂：报加载失败而非「未找到该币种」，否则误导用户
+  if (error && !snapshot) {
+    return (
+      <main className="mx-auto flex w-full max-w-7xl flex-1 2xl:max-w-[1680px] 2xl:px-10 flex-col items-center justify-center gap-4 px-6 py-24">
+        <div className="flex size-14 items-center justify-center rounded-full border">
+          <TriangleAlert className="size-6" />
+        </div>
+        <div className="text-center">
+          <p className="font-semibold">{t("common.loadFail")}</p>
+          <p className="mt-1 font-mono text-xs text-muted-foreground">{error}</p>
+        </div>
+        <Button onClick={refresh} variant="outline" size="sm" className="gap-1.5">
+          <RotateCw className="size-3.5" /> {t("common.retry")}
+        </Button>
       </main>
     )
   }

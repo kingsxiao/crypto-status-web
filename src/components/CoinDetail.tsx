@@ -15,7 +15,7 @@ import { t, useT } from "@/i18n"
 import type { Coin } from "@/lib/api"
 import { analyzeCoin } from "@/lib/coinAnalysis"
 import { formatPrice, formatUsdCompact } from "@/lib/format"
-import { fetchCandles, mergeLiveTick, type Candle } from "@/lib/kline"
+import { fetchCandles, mergeLiveTick, pollIntervalMs, type Candle } from "@/lib/kline"
 import { TRADE_SYMBOLS, type LiveTicker } from "@/lib/realtime"
 import { cn } from "@/lib/utils"
 
@@ -60,13 +60,12 @@ export function CoinDetail({ coin, live, onBack }: Props) {
   useT()
   const [intervalKey, setIntervalKey] = useState("1d")
   const [range, setRange] = useState<100 | 250 | 500>(250)
-  const [overlays, setOverlays] = useState({ ma: true, boll: false })
+  const [overlays, setOverlays] = useState({ ma: true, boll: false, fib: false })
   const [panes, setPanes] = useState({ rsi: true, macd: false, kdj: false })
 
   const [candles, setCandles] = useState<Candle[] | null>(null)
   const [renderMode, setRenderMode] = useState<"candles" | "line">("candles")
   const [source, setSource] = useState<string>("")
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   // 独立日线序列：多空观点分析固定基于日线，不随图表周期切换
@@ -74,37 +73,64 @@ export function CoinDetail({ coin, live, onBack }: Props) {
 
   const symbols = TRADE_SYMBOLS[coin.id]
 
-  const load = useCallback(async () => {
-    if (!symbols) return
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetchCandles(coin.id, symbols, intervalKey)
-      setCandles(res.candles)
-      setRenderMode(res.renderMode)
-      setSource(res.source === "coingecko-line" ? t("coin.source.snapshot") : t("coin.source.live"))
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t("coin.loadFailFallback"))
-    } finally {
-      setLoading(false)
-    }
-  }, [coin.id, symbols, intervalKey])
+  // 请求代际：切周期/切币种后旧响应作废，防止慢响应覆盖新数据
+  const genRef = useRef(0)
+  // 是否已持有图表数据：静默轮询失败时据此决定是否清空图表（ref 避免 candles
+  // 变化改变 load 身份、进而重置轮询定时器）
+  const hasDataRef = useRef(false)
+
+  const load = useCallback(
+    async (silent = false) => {
+      if (!symbols) {
+        // 直链进入无交易对的币种（如稳定币）：给出明确提示而非永久骨架屏
+        setError(t("coin.noChart"))
+        return
+      }
+      const gen = ++genRef.current
+      if (!silent) {
+        hasDataRef.current = false
+        // 周期切换/手动重试清掉旧图，candles 置空即触发骨架屏，
+        // 避免新周期数据到达前展示错位的旧周期图表
+        setCandles(null)
+      }
+      try {
+        const res = await fetchCandles(coin.id, symbols, intervalKey)
+        if (gen !== genRef.current) return
+        setCandles(res.candles)
+        hasDataRef.current = true
+        setRenderMode(res.renderMode)
+        setSource(res.source === "coingecko-line" ? t("coin.source.snapshot") : t("coin.source.live"))
+        setError(null)
+      } catch (e) {
+        if (gen !== genRef.current) return
+        // 静默轮询失败且已有数据：保留图表等下一轮重试
+        if (!silent || !hasDataRef.current) {
+          setError(e instanceof Error ? e.message : t("coin.loadFailFallback"))
+        }
+      }
+    },
+    [coin.id, symbols, intervalKey]
+  )
 
   useEffect(() => {
     load()
   }, [load])
 
-  // 周期切换时 60s 静默轮询，保证K线不至于过分陈旧
+  // 静默轮询保证K线不至于过分陈旧；秒/分钟级周期按 pollIntervalMs 收紧节奏。
+  // 轮询走 silent 路径：不闪骨架屏、失败不清空已有图表
   useEffect(() => {
-    const t = setInterval(load, 60_000)
-    return () => clearInterval(t)
-  }, [load])
+    const timer = setInterval(() => load(true), pollIntervalMs(intervalKey))
+    return () => clearInterval(timer)
+  }, [load, intervalKey])
 
   // 独立加载日线（仅币种切换时重拉；静默失败不影响图表）
+  const dailyGenRef = useRef(0)
   const loadDaily = useCallback(async () => {
     if (!symbols) return
+    const gen = ++dailyGenRef.current
     try {
       const res = await fetchCandles(coin.id, symbols, "1d")
+      if (gen !== dailyGenRef.current) return // 切币种后的旧响应，丢弃
       setDailyCandles(res.candles)
     } catch {
       /* 观点区显示数据不足提示 */
@@ -127,10 +153,10 @@ export function CoinDetail({ coin, live, onBack }: Props) {
   }, [live])
   const [liveSampled, setLiveSampled] = useState<LiveTicker | undefined>(undefined)
   useEffect(() => {
-    const t = setInterval(() => {
+    const timer = setInterval(() => {
       setLiveSampled((prev) => (liveRef.current === prev ? prev : liveRef.current))
     }, 5_000)
-    return () => clearInterval(t)
+    return () => clearInterval(timer)
   }, [])
 
   // 实时价合并到最后一根K线
@@ -231,12 +257,10 @@ export function CoinDetail({ coin, live, onBack }: Props) {
             label={t("coin.intervalLabel")}
             value={intervalKey}
             onChange={setIntervalKey}
-            items={[
-              { value: "1h", label: <span className="font-mono">{t("coin.interval.1h")}</span> },
-              { value: "4h", label: <span className="font-mono">{t("coin.interval.4h")}</span> },
-              { value: "1d", label: <span className="font-mono">{t("coin.interval.1d")}</span> },
-              { value: "1w", label: <span className="font-mono">{t("coin.interval.1w")}</span> },
-            ]}
+            items={(["1s", "1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"] as const).map((k) => ({
+              value: k,
+              label: <span className="font-mono">{t(`coin.interval.${k}`)}</span>,
+            }))}
           />
 
           <Separator orientation="vertical" className="!h-6" />
@@ -259,6 +283,9 @@ export function CoinDetail({ coin, live, onBack }: Props) {
             </Toggle>
             <Toggle active={overlays.boll} onClick={() => setOverlays((o) => ({ ...o, boll: !o.boll }))} hint={t("coin.overlay.bollHint")}>
               BOLL
+            </Toggle>
+            <Toggle active={overlays.fib} onClick={() => setOverlays((o) => ({ ...o, fib: !o.fib }))} hint={t("coin.overlay.fibHint")}>
+              FIB
             </Toggle>
           </div>
 
@@ -291,9 +318,9 @@ export function CoinDetail({ coin, live, onBack }: Props) {
             <div className="flex h-80 flex-col items-center justify-center gap-3">
               <p className="text-sm font-semibold">{t("coin.loadFail")}</p>
               <p className="font-mono text-xs text-muted-foreground">{error}</p>
-              <Button variant="outline" size="sm" onClick={load}>{t("common.retry")}</Button>
+              <Button variant="outline" size="sm" onClick={() => load()}>{t("common.retry")}</Button>
             </div>
-          ) : !visible || loading ? (
+          ) : !visible ? (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <Skeleton className="h-4 w-28 rounded-md" />

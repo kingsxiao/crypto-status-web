@@ -106,7 +106,13 @@ function fetchDerivatives(): Promise<DerivativesData> {
     )
   const ls = fetchJSON<LsRow[]>(
     `${FAPI}/futures/data/globalLongShortAccountRatio?symbol=BTCUSDT&period=1d&limit=8`,
-  ).then((rows) => rows.map((r) => Number(r.longShortRatio)))
+  ).then((rows) => {
+    const trend = rows.map((r) => Number(r.longShortRatio)).filter(Number.isFinite)
+    // 偶发返回空表/全非法行：不抛错的话 btcLsRatio 为 undefined，
+    // computeVerdict 里 toFixed 直接抛异常炸掉整页渲染；抛错交由 settle 置 null
+    if (trend.length === 0) throw new Error("ls rows empty")
+    return trend
+  })
   return Promise.all([prem("BTCUSDT"), prem("ETHUSDT"), ls]).then(
     ([btcFundingPct8h, ethFundingPct8h, trend]) => ({
       btcFundingPct8h,

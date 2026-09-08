@@ -263,9 +263,13 @@ export function PortfolioPage() {
   const [form, setForm] = useState<FormState>({ mode: "closed" })
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [confirmClear, setConfirmClear] = useState(false)
+  // 两个二次确认各自独立定时器：共用一个的话，先武装的一方会把另一方
+  // 的自动复位 timer 清掉，导致破坏性确认永久停留在武装态
+  const deleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => () => {
+    if (deleteTimer.current) clearTimeout(deleteTimer.current)
     if (clearTimer.current) clearTimeout(clearTimer.current)
   }, [])
 
@@ -342,8 +346,8 @@ export function PortfolioPage() {
       setConfirmDelete(null)
     } else {
       setConfirmDelete(id)
-      if (clearTimer.current) clearTimeout(clearTimer.current)
-      clearTimer.current = setTimeout(() => setConfirmDelete(null), 2600)
+      if (deleteTimer.current) clearTimeout(deleteTimer.current)
+      deleteTimer.current = setTimeout(() => setConfirmDelete(null), 2600)
     }
   }
 
