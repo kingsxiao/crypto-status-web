@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect } from "react"
 import { HashRouter, Navigate, Route, Routes, useLocation } from "react-router-dom"
 
+import { AlertEngine } from "@/components/AlertEngine"
 import { BackToTop } from "@/components/layout/BackToTop"
 import { Footer } from "@/components/layout/Footer"
 import { Header } from "@/components/layout/Header"
@@ -13,6 +14,7 @@ import {
   StatStripSkeleton,
 } from "@/components/loading"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ToastHost } from "@/components/ui/toast"
 import { MarketDataProvider } from "@/context/MarketDataContext"
 import { prefetchOnIdle } from "@/lib/routePrefetch"
 import { DashboardPage } from "@/pages/DashboardPage"
@@ -23,6 +25,8 @@ const CoinPage = lazy(() => import("@/pages/CoinPage").then((m) => ({ default: m
 const SentimentPage = lazy(() => import("@/pages/SentimentPage").then((m) => ({ default: m.SentimentPage })))
 const VerdictPage = lazy(() => import("@/pages/VerdictPage").then((m) => ({ default: m.VerdictPage })))
 const ConverterPage = lazy(() => import("@/pages/ConverterPage").then((m) => ({ default: m.ConverterPage })))
+const PortfolioPage = lazy(() => import("@/pages/PortfolioPage").then((m) => ({ default: m.PortfolioPage })))
+const AlertsPage = lazy(() => import("@/pages/AlertsPage").then((m) => ({ default: m.AlertsPage })))
 const AboutPage = lazy(() => import("@/pages/AboutPage").then((m) => ({ default: m.AboutPage })))
 
 /** 路由切换后回到页面顶部；首屏渲染完成后空闲预取常用路由 chunk */
@@ -91,6 +95,8 @@ export default function App() {
               <Route path="/sentiment" element={<SentimentPage />} />
               <Route path="/verdict" element={<VerdictPage />} />
               <Route path="/converter" element={<ConverterPage />} />
+              <Route path="/portfolio" element={<PortfolioPage />} />
+              <Route path="/alerts" element={<AlertsPage />} />
               <Route path="/about" element={<AboutPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
@@ -98,6 +104,10 @@ export default function App() {
 
           <Footer />
           <BackToTop />
+
+          {/* 预警触发引擎（无头）与全局 toast 容器 */}
+          <AlertEngine />
+          <ToastHost />
         </div>
       </MarketDataProvider>
     </HashRouter>

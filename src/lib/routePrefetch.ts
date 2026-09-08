@@ -11,6 +11,8 @@ const routes: { match: (to: string) => boolean; load: () => Promise<unknown> }[]
   { match: (to) => to === "/sentiment", load: () => import("@/pages/SentimentPage") },
   { match: (to) => to === "/verdict", load: () => import("@/pages/VerdictPage") },
   { match: (to) => to === "/converter", load: () => import("@/pages/ConverterPage") },
+  { match: (to) => to === "/portfolio", load: () => import("@/pages/PortfolioPage") },
+  { match: (to) => to === "/alerts", load: () => import("@/pages/AlertsPage") },
   { match: (to) => to === "/about", load: () => import("@/pages/AboutPage") },
 ]
 
@@ -29,6 +31,8 @@ export function prefetchOnIdle() {
     prefetchRoute("/markets")
     prefetchRoute("/sentiment")
     prefetchRoute("/verdict")
+    prefetchRoute("/portfolio")
+    prefetchRoute("/alerts")
   }
   if ("requestIdleCallback" in window) {
     requestIdleCallback(run, { timeout: 3000 })

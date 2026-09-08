@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronRight, Search, Star } from "lucide-react"
+import { ArrowDown, ArrowUp, ArrowUpDown, Bell, ChevronRight, Search, Star } from "lucide-react"
 
 import { AssetCell, LivePrice, Pct } from "@/components/price-cells"
 import { Sparkline } from "@/components/Sparkline"
@@ -242,6 +242,9 @@ export function MarketsPage() {
                   <SortHead label={t("common.col.vol24h")} sortKey="volume" active={sortKey === "volume"} dir={sortDir} onSort={onSort} className="hidden text-right lg:table-cell" />
                   <SortHead label={t("common.col.ath")} sortKey="ath" active={sortKey === "ath"} dir={sortDir} onSort={onSort} className="hidden text-right xl:table-cell" />
                   <TableHead className="hidden w-[132px] md:table-cell">{t("common.col.trend7")}</TableHead>
+                  <TableHead className="hidden w-8 sm:table-cell">
+                    <span className="sr-only">{t("page.alerts.title")}</span>
+                  </TableHead>
                   <TableHead className="w-6">
                     <span className="sr-only">{t("common.col.detailSr")}</span>
                   </TableHead>
@@ -314,6 +317,21 @@ export function MarketsPage() {
                         >
                           <Sparkline data={spark} width={120} height={34} />
                         </div>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        {hasDetail && (
+                          <button
+                            aria-label={t("markets.bellSr", { name: c.name })}
+                            title={t("markets.bellSr", { name: c.name })}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              navigate(`/alerts?coin=${c.id}`)
+                            }}
+                            className="text-muted-foreground/40 transition-colors hover:text-primary"
+                          >
+                            <Bell className="size-3.5" />
+                          </button>
+                        )}
                       </TableCell>
                       <TableCell className="text-muted-foreground/70">
                         {hasDetail ? <ChevronRight className="size-3.5" /> : <span className="block text-center font-mono text-[10px] text-muted-foreground">{t("common.stablecoin")}</span>}
