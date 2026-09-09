@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  buildIcs,
   countdownParts,
   eventEndMs,
   eventProgress,
@@ -13,6 +14,8 @@ import {
   LIVE_WINDOW_MS,
   MARKET_EVENTS,
   sortedEvents,
+  srcZone,
+  statusCounts,
   type MarketEvent,
 } from "@/lib/events"
 
@@ -174,5 +177,71 @@ describe("groupEventsByDay / localDayKey", () => {
 
   it("dayKey 为 YYYY-MM-DD 形态", () => {
     expect(localDayKey(Date.UTC(2026, 8, 8))).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+})
+
+describe("statusCounts", () => {
+  it("三态计数之和等于总数，且 2026-09-08 中午切片符合数据集事实", () => {
+    const now = Date.parse("2026-09-08T12:00:00Z")
+    const c = statusCounts(MARKET_EVENTS, now)
+    expect(c.upcoming + c.live + c.finished).toBe(MARKET_EVENTS.length)
+    expect(c.finished).toBe(5)
+    expect(c.live).toBe(0)
+    expect(c.upcoming).toBe(MARKET_EVENTS.length - 5)
+  })
+})
+
+describe("srcZone", () => {
+  it("按 ISO 偏移映射到事件原生时区", () => {
+    const by = (id: string) => MARKET_EVENTS.find((e) => e.id === id)!
+    expect(srcZone(by("fomc-2026-09"))?.iana).toBe("America/New_York")
+    expect(srcZone(by("fomc-2026-12"))?.iana).toBe("America/New_York")
+    expect(srcZone(by("ecb-2026-09"))?.iana).toBe("Europe/Berlin")
+    expect(srcZone(by("ecb-2026-10"))?.iana).toBe("Europe/Berlin")
+    expect(srcZone(by("sui-unlock-2026-09"))?.iana).toBe("UTC")
+  })
+
+  it("未知偏移返回 null", () => {
+    expect(srcZone(ev({ id: "x", start: "2026-01-01T00:00:00+09:00" }))).toBeNull()
+  })
+})
+
+describe("buildIcs", () => {
+  const by = (id: string) => MARKET_EVENTS.find((e) => e.id === id)!
+  const STAMP = Date.parse("2026-01-01T00:00:00Z")
+
+  it("定时事件：UTC 时刻 + 显式 end", () => {
+    const ics = buildIcs(by("ecb-2026-09"), "zh", STAMP)
+    expect(ics).toContain("DTSTART:20260910T121500Z") // 14:15+02:00 → 12:15Z
+    expect(ics).toContain("DTEND:20260910T134500Z") // 15:45+02:00 → 13:45Z
+    expect(ics).toContain("DTSTAMP:20260101T000000Z")
+    expect(ics).toContain("UID:ecb-2026-09@crypto-status")
+  })
+
+  it("瞬时事件：无 end 时 DTEND 为开始 + 反应窗口", () => {
+    const ics = buildIcs(by("cpi-2026-09"), "zh", STAMP)
+    expect(ics).toContain("DTSTART:20260911T123000Z") // 08:30-04:00 → 12:30Z
+    expect(ics).toContain(`DTEND:20260911T133000Z`)
+  })
+
+  it("approx 事件导出为全天事项（DTEND 排他次日）", () => {
+    const ics = buildIcs(by("sui-unlock-2026-09"), "zh", STAMP)
+    expect(ics).toContain("DTSTART;VALUE=DATE:20260903")
+    expect(ics).toContain("DTEND;VALUE=DATE:20260904")
+  })
+
+  it("window 事件导出为跨日全天区间", () => {
+    const ics = buildIcs(by("glamsterdam-mainnet"), "zh", STAMP)
+    expect(ics).toContain("DTSTART;VALUE=DATE:20261001")
+    expect(ics).toContain("DTEND;VALUE=DATE:20270101") // 12-31 23:59:59Z + 1d
+  })
+
+  it("文本转义 RFC 5545（逗号/分号）且行尾 CRLF", () => {
+    const tricky = ev({ id: "t", zh: "A, B; C", descZh: "x", start: "2026-01-01T00:00:00Z" })
+    const ics = buildIcs(tricky, "zh", STAMP)
+    expect(ics).toContain("SUMMARY:A\\, B\\; C")
+    expect(ics.endsWith("\r\n")).toBe(true)
+    expect(ics.split("\r\n").length).toBeGreaterThan(10)
+    expect(ics.split("\r\n").some((l) => !l.endsWith("\r") && l.includes("\n"))).toBe(false)
   })
 })

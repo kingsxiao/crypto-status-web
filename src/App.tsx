@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect } from "react"
 import { HashRouter, Navigate, Route, Routes, useLocation } from "react-router-dom"
 
 import { AlertEngine } from "@/components/AlertEngine"
+import { EventReminderEngine } from "@/components/EventReminderEngine"
 import { BackToTop } from "@/components/layout/BackToTop"
 import { Footer } from "@/components/layout/Footer"
 import { Header } from "@/components/layout/Header"
@@ -107,8 +108,9 @@ export default function App() {
           <Footer />
           <BackToTop />
 
-          {/* 预警触发引擎（无头）与全局 toast 容器 */}
+          {/* 预警触发引擎与事件提醒引擎（无头）+ 全局 toast 容器 */}
           <AlertEngine />
+          <EventReminderEngine />
           <ToastHost />
         </div>
       </MarketDataProvider>

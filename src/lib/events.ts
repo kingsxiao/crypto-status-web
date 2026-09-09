@@ -395,3 +395,79 @@ export function groupEventsByDay(events: MarketEvent[]): { dayKey: string; event
   }
   return groups
 }
+
+/* ------------------------------ 筛选计数 / 源时区 / 日历导出 ------------------------------ */
+
+/** 各状态条数（Segmented 角标用）；「全部」= 三者之和 */
+export function statusCounts(
+  events: MarketEvent[],
+  now: number
+): { upcoming: number; live: number; finished: number } {
+  const c = { upcoming: 0, live: 0, finished: 0 }
+  for (const e of events) c[eventStatus(e, now)]++
+  return c
+}
+
+/** ISO 偏移 → 事件原生时区（展示「美东 14:00」式参考时间用）；未知偏移返回 null */
+const SRC_ZONES: Record<string, { iana: string; zh: string; en: string }> = {
+  "-04:00": { iana: "America/New_York", zh: "美东", en: "US ET" },
+  "-05:00": { iana: "America/New_York", zh: "美东", en: "US ET" },
+  "+01:00": { iana: "Europe/Berlin", zh: "法兰克福", en: "Frankfurt" },
+  "+02:00": { iana: "Europe/Berlin", zh: "法兰克福", en: "Frankfurt" },
+  Z: { iana: "UTC", zh: "UTC", en: "UTC" },
+}
+
+export function srcZone(e: MarketEvent): { iana: string; zh: string; en: string } | null {
+  const m = e.start.match(/(?:Z|[+-]\d{2}:\d{2})$/)
+  return m ? (SRC_ZONES[m[0]] ?? null) : null
+}
+
+/* ------------------------------ .ics 日历导出 ------------------------------ */
+
+/** RFC 5545 文本转义：反斜杠、分号、逗号、换行 */
+function icsEscape(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n")
+}
+
+function icsStamp(ms: number): string {
+  return new Date(ms).toISOString().replace(/[-:]/g, "").slice(0, 15) + "Z"
+}
+
+function icsDate(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 10).replace(/-/g, "")
+}
+
+/**
+ * 单事件 .ics（VEVENT）。定时事件用 UTC 时刻；approx / window 事件只确知日期，
+ * 导出为全天事项（DTEND 为排他的次日，window 取窗口末日 +1）。
+ * nowMs 仅作 DTSTAMP，测试可固定。
+ */
+export function buildIcs(e: MarketEvent, locale: "zh" | "en", nowMs: number = Date.now()): string {
+  const start = eventStartMs(e)
+  const title = icsEscape(locale === "en" ? e.en : e.zh)
+  const desc = icsEscape((locale === "en" ? e.descEn : e.descZh) ?? "")
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//CRYPTO STATUS//Event Calendar//ZH",
+    "CALSCALE:GREGORIAN",
+    "BEGIN:VEVENT",
+    `UID:${e.id}@crypto-status`,
+    `DTSTAMP:${icsStamp(nowMs)}`,
+  ]
+  if (e.approx || e.window) {
+    // 全天事项：结束日排他 —— window 到窗口末日次日，approx 固定一天
+    const endMs = e.end ? Date.parse(e.end) + 86_400_000 : start + 86_400_000
+    lines.push(`DTSTART;VALUE=DATE:${icsDate(start)}`, `DTEND;VALUE=DATE:${icsDate(endMs)}`)
+  } else {
+    const endMs = e.end ? Date.parse(e.end) : start + LIVE_WINDOW_MS
+    lines.push(`DTSTART:${icsStamp(start)}`, `DTEND:${icsStamp(endMs)}`)
+  }
+  lines.push(
+    `SUMMARY:${title}`,
+    `DESCRIPTION:${desc}${e.source ? icsEscape(` · ${e.source.url}`) : ""}`,
+    "END:VEVENT",
+    "END:VCALENDAR"
+  )
+  return lines.join("\r\n") + "\r\n"
+}

@@ -732,8 +732,21 @@ export const zh = {
   "ev.order.desc": "新近在前",
   "ev.empty.title": "该筛选下暂无事件",
   "ev.empty.desc": "换一个状态或类别试试",
+  "ev.empty.live.title": "当前没有进行中的事件",
+  "ev.empty.live.desc": "下一事件 {title} · 约 {t} 后开始",
+  "ev.row.expandSr": "展开或收起事件详情",
+  "ev.approxTip": "时刻为约数",
+  "ev.ics": "添加到日历",
+  "ev.locateNow": "定位现在",
+  "ev.nextUp": "随后",
+  "ev.remind.add": "提醒我",
+  "ev.remind.cancel": "取消提醒",
+  "ev.remind.set": "已设提醒",
+  "ev.remind.hint": "提前 10 分钟 · 仅站点打开时有效",
+  "ev.toast.title": "事件即将开始",
+  "ev.toast.desc": "{title} · {time} 开始",
   "ev.note":
-    "事件日程依据官方公告与公开日历人工核对（美联储 / BLS / 欧央行 / 项目方），时间已换算为本地时区；代币解锁时刻多为约数，以太坊升级日期待官方确认，一切以最终公布为准。",
+    "事件日程依据官方公告与公开日历人工核对（美联储 / BLS / 欧央行 / 项目方），时间已换算为本地时区；代币解锁时刻多为约数，以太坊升级日期待官方确认，一切以最终公布为准。提醒为纯前端实现，仅站点打开时有效。",
 } as const
 
 export type MessageKey = keyof typeof zh

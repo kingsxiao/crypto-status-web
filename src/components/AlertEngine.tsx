@@ -13,32 +13,9 @@ import { useEffect } from "react"
 import { useLive } from "@/context/MarketDataContext"
 import { t } from "@/i18n"
 import { isTriggered, readAlerts, readSound, markTriggered } from "@/lib/alerts"
+import { alertBeep } from "@/lib/beep"
 import { pushToast } from "@/components/ui/toast"
 import { formatPrice } from "@/lib/format"
-
-/** 双音短促提示；AudioContext 在无用户手势时可能被拒绝，静默降级 */
-function beep() {
-  try {
-    const ctx = new AudioContext()
-    const play = (freq: number, at: number, dur: number) => {
-      const osc = ctx.createOscillator()
-      const gain = ctx.createGain()
-      osc.type = "sine"
-      osc.frequency.value = freq
-      gain.gain.setValueAtTime(0.0001, ctx.currentTime + at)
-      gain.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + at + 0.02)
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + dur)
-      osc.connect(gain).connect(ctx.destination)
-      osc.start(ctx.currentTime + at)
-      osc.stop(ctx.currentTime + at + dur + 0.02)
-    }
-    play(880, 0, 0.16)
-    play(1174.7, 0.2, 0.22)
-    setTimeout(() => ctx.close().catch(() => {}), 800)
-  } catch {
-    /* 自动播放策略拦截等场景直接放弃 */
-  }
-}
 
 function fireAlert(
   coinId: string,
@@ -74,7 +51,7 @@ function fireAlert(
   }
 
   // 3) 提示音 + 振动
-  if (readSound()) beep()
+  if (readSound()) alertBeep()
   try {
     navigator.vibrate?.([120, 60, 120])
   } catch {
