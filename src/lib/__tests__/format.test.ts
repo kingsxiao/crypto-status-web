@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { formatPct, formatPrice, formatTime, formatUsdCompact } from "@/lib/format"
+import { formatPct, formatPrice, formatTime, formatUsdCompact, formatWatchTitle } from "@/lib/format"
 import { mergeLiveTick } from "@/lib/kline"
 import { toNum } from "@/lib/http"
 
@@ -45,6 +45,21 @@ describe("formatPct", () => {
   it("null/NaN → 占位符", () => {
     expect(formatPct(null)).toBe("—")
     expect(formatPct(Number.NaN)).toBe("—")
+  })
+})
+
+describe("formatWatchTitle 盯盘标题", () => {
+  it("涨用 ▲、跌用 ▼，符号统一大写", () => {
+    expect(formatWatchTitle("btc", 67123.456, 1.234)).toBe("BTC $67,123.46 ▲1.23%")
+    expect(formatWatchTitle("ETH", 3500, -0.5)).toBe("ETH $3,500.00 ▼0.50%")
+  })
+  it("0% 视为上涨方向（▲0.00%）", () => {
+    expect(formatWatchTitle("SOL", 150, 0)).toBe("SOL $150.00 ▲0.00%")
+  })
+  it("无涨跌幅只显示价格；无价格返回空串供调用方回退", () => {
+    expect(formatWatchTitle("XRP", 0.5234, null)).toBe("XRP $0.5234")
+    expect(formatWatchTitle("DOGE", null, 1)).toBe("")
+    expect(formatWatchTitle("DOGE", undefined, undefined)).toBe("")
   })
 })
 

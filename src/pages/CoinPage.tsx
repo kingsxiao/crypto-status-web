@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useLive, useMarket } from "@/context/MarketDataContext"
 import { t, useT } from "@/i18n"
 import { usePageMeta } from "@/hooks/usePageMeta"
+import { formatWatchTitle } from "@/lib/format"
 
 export function CoinPage() {
   useT()
@@ -16,10 +17,11 @@ export function CoinPage() {
   const tickers = useLive()
   const navigate = useNavigate()
   const coin = snapshot?.coins.find((c) => c.id === id) ?? null
+  // 有实时价时标签页标题切为盯盘格式（每秒随 useLive 刷新），否则回退静态标题
+  const live = tickers[id]
+  const watch = coin ? formatWatchTitle(coin.symbol, live?.price, live?.changePct) : ""
   usePageMeta({
-    title: coin
-      ? `${coin.name} (${coin.symbol.toUpperCase()}) · CRYPTO STATUS`
-      : t("meta.coin"),
+    title: watch || (coin ? `${coin.name} (${coin.symbol.toUpperCase()}) · CRYPTO STATUS` : t("meta.coin")),
   })
 
   if (loading && !snapshot) {

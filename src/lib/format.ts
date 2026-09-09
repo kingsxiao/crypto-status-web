@@ -22,6 +22,20 @@ export function formatPct(v: number | null | undefined, digits = 2): string {
   return `${v >= 0 ? "+" : ""}${v.toFixed(digits)}%`
 }
 
+/** 盯盘标签页标题：BTC $67,123.45 ▲1.20%（跌 ▼，无涨跌幅只显示价格）；无价格返回空串 */
+export function formatWatchTitle(
+  symbol: string,
+  price: number | null | undefined,
+  changePct: number | null | undefined,
+): string {
+  if (price == null) return ""
+  const pct =
+    changePct == null
+      ? ""
+      : ` ${changePct >= 0 ? "▲" : "▼"}${Math.abs(changePct).toFixed(2)}%`
+  return `${symbol.toUpperCase()} $${formatPrice(price)}${pct}`
+}
+
 export function formatTime(ts: number | null): string {
   if (!ts) return "—"
   return new Date(ts).toLocaleTimeString("zh-CN", {
