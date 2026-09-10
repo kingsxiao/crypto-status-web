@@ -19,15 +19,7 @@ import { AssetCell, LivePrice } from "@/components/price-cells"
 import { useLive, useMarket } from "@/context/MarketDataContext"
 import { t, useT } from "@/i18n"
 import { usePageMeta } from "@/hooks/usePageMeta"
-import { formatPrice } from "@/lib/format"
-
-/** 自适应位数的数量格式化：大数带千分位，小数最多 8 位有效 */
-function formatAmount(v: number): string {
-  if (!Number.isFinite(v)) return "—"
-  if (v === 0) return "0"
-  if (v >= 1) return v.toLocaleString("en-US", { maximumFractionDigits: 8 })
-  return v.toPrecision(4).replace(/\.?0+$/, "")
-}
+import { formatAmount, formatPrice } from "@/lib/format"
 
 function CoinSelect({
   value,
@@ -61,7 +53,7 @@ const QUICK = [0.1, 0.5, 1, 10, 100]
 
 export function ConverterPage() {
   useT()
-  usePageMeta({ title: t("meta.converter") })
+  usePageMeta({ title: t("meta.converter"), description: t("page.converter.desc") })
   const { snapshot, loading } = useMarket()
   const tickers = useLive()
 

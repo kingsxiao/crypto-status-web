@@ -6,6 +6,7 @@
  */
 
 import type { LMsg, MessageKey } from "@/i18n"
+import { TECH_TIERS } from "@/lib/thresholds"
 import type { FearGreedEntry, MarketChart } from "./api"
 
 /* ------------------------------ 文案 key 映射 ------------------------------ */
@@ -352,10 +353,10 @@ export function analyze(btcChart: MarketChart, fng: FearGreedEntry[], athFromSna
   const composite = Math.round((raw / (wSum * 2)) * 100)
 
   const level: Analysis["signal"]["level"] =
-    composite >= 40 ? "strong-long"
-    : composite >= 15 ? "long"
-    : composite > -15 ? "neutral"
-    : composite > -40 ? "short"
+    composite >= TECH_TIERS.strong ? "strong-long"
+    : composite >= TECH_TIERS.weak ? "long"
+    : composite > -TECH_TIERS.weak ? "neutral"
+    : composite > -TECH_TIERS.strong ? "short"
     : "strong-short"
 
   return {

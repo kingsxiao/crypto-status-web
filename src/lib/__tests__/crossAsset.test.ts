@@ -73,6 +73,18 @@ describe("gradeRecord（次日复盘）", () => {
     expect(gradeRecord({ ...base, date: "a", composite: 5 }, { ...base, date: "b", mcapChg24h: 1 })).toBe("partial")
     expect(gradeRecord({ ...base, date: "a", composite: 20 }, { ...base, date: "b", mcapChg24h: 0 })).toBe("partial")
   })
+  it("有绝对市值时优先用隔日市值差，忽略 24h 滚动值", () => {
+    const cur = { ...base, date: "2026-09-06", mcapAbs: 100 }
+    // 滚动口径显示 +2%，但隔日市值差为 -3% → 按隔日差判 wrong
+    const next = { ...base, date: "2026-09-07", mcapAbs: 97, mcapChg24h: 2 }
+    expect(gradeRecord(cur, next)).toBe("wrong")
+    // 隔日 +1% → correct
+    expect(gradeRecord(cur, { ...base, date: "2026-09-07", mcapAbs: 101, mcapChg24h: -2 })).toBe("correct")
+  })
+  it("旧档无绝对市值时退回 24h 滚动口径", () => {
+    const cur = { ...base, date: "2026-09-06" } // 无 mcapAbs
+    expect(gradeRecord(cur, { ...base, date: "2026-09-07", mcapChg24h: 1, mcapAbs: 105 })).toBe("correct")
+  })
 })
 
 describe("gradeStats", () => {

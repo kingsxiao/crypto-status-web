@@ -8,6 +8,7 @@
  *   4. CoinGecko market_chart（粒度粗：≤1 天 5 分钟、≤30 天小时级，渲染为折线）
  */
 
+import { fetchCG } from "@/lib/cg"
 import { fetchJSON, toNum } from "@/lib/http"
 
 export interface Candle {
@@ -98,8 +99,8 @@ export async function fetchCandles(
 
   /* 4) CoinGecko 折线兜底（days>90 才显式指定 interval=daily；days=1 时该参数会把数据压成 2 个点） */
   const days = itv.cgDays ?? 365
-  const chart = await fetchJSON<{ prices: [number, number][] }>(
-    `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=${days}${days > 90 ? "&interval=daily" : ""}`
+  const chart = await fetchCG<{ prices: [number, number][] }>(
+    `/coins/${coinId}/market_chart?vs_currency=usd&days=${days}${days > 90 ? "&interval=daily" : ""}`
   )
   const candles: Candle[] = chart.prices.map(([t, p], i) => ({
     time: t,

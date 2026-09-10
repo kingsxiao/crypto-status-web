@@ -22,6 +22,7 @@ export function CoinPage() {
   const watch = coin ? formatWatchTitle(coin.symbol, live?.price, live?.changePct) : ""
   usePageMeta({
     title: watch || (coin ? `${coin.name} (${coin.symbol.toUpperCase()}) · CRYPTO STATUS` : t("meta.coin")),
+    description: t("meta.coin.desc"),
   })
 
   if (loading && !snapshot) {

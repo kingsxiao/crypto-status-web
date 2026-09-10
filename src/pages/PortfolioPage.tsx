@@ -1,14 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react"
-import { ChevronDown, Coins, Pencil, Plus, ShieldCheck, Trash2, Wallet } from "lucide-react"
+import { useMemo, useState } from "react"
+import { Coins, Pencil, Plus, ShieldCheck, Trash2, Wallet } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/PageHeader"
-import { TableSkeleton } from "@/components/loading"
 import { LivePrice, Pct } from "@/components/price-cells"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHead, CardHeader } from "@/components/ui/card"
-import { IconChip } from "@/components/ui/icon-chip"
-import { Input } from "@/components/ui/input"
-import { SkeletonCard, SkPageHeader, StatStripSkeleton } from "@/components/loading"
+import { SkeletonCard, SkPageHeader, StatStripSkeleton, TableSkeleton } from "@/components/loading"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
@@ -22,10 +19,15 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useLive, useMarket } from "@/context/MarketDataContext"
 import { t, useT } from "@/i18n"
 import { usePageMeta } from "@/hooks/usePageMeta"
+import { useTwoStepConfirm } from "@/hooks/useTwoStepConfirm"
 import type { Coin } from "@/lib/api"
-import { formatPrice, formatUsdCompact } from "@/lib/format"
+import { formatAmount, formatPrice, formatUsdCompact, parseNum } from "@/lib/format"
 import { computeStats, usePortfolio, type Holding, type PriceRef } from "@/lib/portfolio"
 import { cn } from "@/lib/utils"
+
+import { AllocDonut } from "./portfolio/AllocDonut"
+import { ALLOC_COLORS } from "./portfolio/colors"
+import { HoldingForm, type FormState } from "./portfolio/HoldingForm"
 
 /* ------------------------------ 视图模型 ------------------------------ */
 
@@ -39,239 +41,25 @@ interface Row {
   pnlPct: number | null
 }
 
-/** 数量格式化：大数千分位，小数最多 8 位有效（与换算器一致） */
-function formatAmount(v: number): string {
-  if (v === 0) return "0"
-  if (v >= 1) return v.toLocaleString("en-US", { maximumFractionDigits: 8 })
-  return v.toPrecision(4).replace(/\.?0+$/, "")
-}
-
 /** 盈亏金额格式化：接近零时避免 formatPrice 的 6 位小数展开 */
 function formatPnlAbs(v: number): string {
   return Math.abs(v) < 0.01 ? "0.00" : formatPrice(Math.abs(v))
-}
-
-/** 配置环形图配色：首段用主题色，其余为明度居中的固定色相（明暗主题通用） */
-const ALLOC_COLORS = [
-  "var(--primary)",
-  "oklch(0.72 0.13 250)",
-  "oklch(0.75 0.13 160)",
-  "oklch(0.78 0.12 80)",
-  "oklch(0.70 0.15 25)",
-  "oklch(0.72 0.12 310)",
-  "oklch(0.75 0.10 200)",
-  "oklch(0.74 0.12 130)",
-  "oklch(0.70 0.10 350)",
-  "oklch(0.72 0.10 60)",
-]
-
-/* ------------------------------ 环形图 ------------------------------ */
-
-function AllocDonut({ slices }: { slices: { key: string; pct: number; color: string }[] }) {
-  const r = 15.9155 // 周长恰为 100，dasharray 直接用百分比
-  // 预计算每段起点（累计百分比），避免渲染期变量重赋值
-  const segments = slices.reduce<{ key: string; pct: number; color: string; start: number }[]>(
-    (acc, s) => {
-      const prev = acc[acc.length - 1]
-      acc.push({ ...s, start: prev ? prev.start + prev.pct : 0 })
-      return acc
-    },
-    []
-  )
-  return (
-    <div className="relative mx-auto w-fit">
-      <svg viewBox="0 0 42 42" className="size-44 sm:size-52" role="img" aria-label={t("pf.alloc.title")}>
-        <circle cx="21" cy="21" r={r} fill="none" stroke="var(--secondary)" strokeWidth="5" />
-        {segments.map((s) => {
-          const len = Math.max(s.pct - (segments.length > 1 ? 0.7 : 0), 0.3)
-          return (
-            <circle
-              key={s.key}
-              cx="21"
-              cy="21"
-              r={r}
-              fill="none"
-              stroke={s.color}
-              strokeWidth={s.pct >= 99.5 ? 5 : 5.8}
-              strokeDasharray={`${len} ${100 - len}`}
-              strokeDashoffset={-s.start}
-              transform="rotate(-90 21 21)"
-            />
-          )
-        })}
-      </svg>
-    </div>
-  )
-}
-
-/* ------------------------------ 表单 ------------------------------ */
-
-type FormState =
-  | { mode: "closed" }
-  | { mode: "add"; coinId: string; amount: string; cost: string }
-  | { mode: "edit"; id: string; coinId: string; amount: string; cost: string }
-
-function parseNum(s: string): number {
-  return parseFloat(s.trim().replace(",", "."))
-}
-
-function HoldingForm({
-  coins,
-  state,
-  prices,
-  existing,
-  onChange,
-  onClose,
-  onSubmit,
-}: {
-  coins: Coin[]
-  state: Extract<FormState, { mode: "add" | "edit" }>
-  prices: Record<string, PriceRef>
-  /** 编辑的币种是否已在持仓中（add 模式下用于覆盖提示） */
-  existing: boolean
-  onChange: (s: FormState) => void
-  onClose: () => void
-  onSubmit: () => void
-}) {
-  useT()
-  const [error, setError] = useState<string | null>(null)
-  const cardRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
-  }, [])
-
-  const amountNum = parseNum(state.amount)
-  const price = prices[state.coinId]?.price ?? coins.find((c) => c.id === state.coinId)?.current_price ?? null
-  const estimate = price != null && Number.isFinite(amountNum) && amountNum > 0 ? amountNum * price : null
-
-  const submit = () => {
-    if (!Number.isFinite(amountNum) || amountNum <= 0) {
-      setError(t("pf.form.amountInvalid"))
-      return
-    }
-    const costNum = state.cost.trim() === "" ? null : parseNum(state.cost)
-    if (costNum != null && (!Number.isFinite(costNum) || costNum < 0)) {
-      setError(t("pf.form.costInvalid"))
-      return
-    }
-    setError(null)
-    onSubmit()
-  }
-
-  return (
-    <div ref={cardRef}>
-    <Card className="fade-up">
-      <CardHeader>
-        <CardHead
-          title={
-            <span className="flex items-center gap-2.5">
-              <IconChip className="border-primary/30 bg-primary/10 text-primary">
-                {state.mode === "add" ? <Plus /> : <Pencil />}
-              </IconChip>
-              {state.mode === "add" ? t("pf.form.add") : t("pf.form.edit")}
-            </span>
-          }
-          desc={existing && state.mode === "add" ? t("pf.form.exists") : t("pf.form.desc")}
-        />
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div>
-            <label htmlFor="pf-coin" className="mb-1 block font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
-              {t("pf.form.asset")}
-            </label>
-            <div className="relative">
-              <select
-                id="pf-coin"
-                value={state.coinId}
-                disabled={state.mode === "edit"}
-                onChange={(e) => onChange({ ...state, coinId: e.target.value })}
-                className="h-11 w-full appearance-none rounded-md border border-input bg-background px-3 pr-8 font-mono text-sm font-semibold uppercase outline-none transition-colors focus-visible:border-foreground/60 focus-visible:ring-2 focus-visible:ring-ring/30 disabled:opacity-60"
-              >
-                {coins.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.symbol.toUpperCase()} · {c.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute top-1/2 right-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            </div>
-          </div>
-          <div>
-            <label htmlFor="pf-amount" className="mb-1 block font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
-              {t("pf.form.amount")}
-            </label>
-            <Input
-              id="pf-amount"
-              inputMode="decimal"
-              value={state.amount}
-              onChange={(e) => onChange({ ...state, amount: e.target.value })}
-              placeholder="0.00"
-              className="h-11 font-mono text-lg font-semibold tabular"
-            />
-          </div>
-          <div>
-            <label htmlFor="pf-cost" className="mb-1 block font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
-              {t("pf.form.cost")}
-            </label>
-            <Input
-              id="pf-cost"
-              inputMode="decimal"
-              value={state.cost}
-              onChange={(e) => onChange({ ...state, cost: e.target.value })}
-              placeholder="USD · 选填"
-              className="h-11 font-mono text-lg font-semibold tabular"
-            />
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] text-muted-foreground">
-            <span>
-              {t("pf.form.valueNow")}：{" "}
-              <span className="font-semibold text-foreground tabular">
-                {estimate != null ? `$${formatPrice(estimate)}` : "—"}
-              </span>
-            </span>
-            {error && <span className="text-down">{error}</span>}
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={onClose}>
-              {t("common.cancel")}
-            </Button>
-            <Button size="sm" onClick={submit}>
-              {t("common.save")}
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-    </div>
-  )
 }
 
 /* ------------------------------ 页面 ------------------------------ */
 
 export function PortfolioPage() {
   useT()
-  usePageMeta({ title: t("meta.portfolio") })
+  usePageMeta({ title: t("meta.portfolio"), description: t("page.portfolio.desc") })
   const { snapshot, loading } = useMarket()
   const tickers = useLive()
   const { holdings, upsert, remove, clear } = usePortfolio()
 
   const [form, setForm] = useState<FormState>({ mode: "closed" })
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
-  const [confirmClear, setConfirmClear] = useState(false)
-  // 两个二次确认各自独立定时器：共用一个的话，先武装的一方会把另一方
+  // 两个二次确认各自独立实例：共用一个的话，先武装的一方会把另一方
   // 的自动复位 timer 清掉，导致破坏性确认永久停留在武装态
-  const deleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => () => {
-    if (deleteTimer.current) clearTimeout(deleteTimer.current)
-    if (clearTimer.current) clearTimeout(clearTimer.current)
-  }, [])
+  const deleteConfirm = useTwoStepConfirm<string>()
+  const clearConfirm = useTwoStepConfirm<true>()
 
   const coins = useMemo(() => snapshot?.coins ?? [], [snapshot])
 
@@ -338,17 +126,6 @@ export function PortfolioPage() {
     const cost = form.cost.trim() === "" ? null : parseNum(form.cost)
     upsert({ id: form.coinId, amount, cost: cost ?? null, addedAt: Date.now() })
     setForm({ mode: "closed" })
-  }
-
-  const twoStepDelete = (id: string) => {
-    if (confirmDelete === id) {
-      remove(id)
-      setConfirmDelete(null)
-    } else {
-      setConfirmDelete(id)
-      if (deleteTimer.current) clearTimeout(deleteTimer.current)
-      deleteTimer.current = setTimeout(() => setConfirmDelete(null), 2600)
-    }
   }
 
   /* ------------------------------ 加载骨架 ------------------------------ */
@@ -609,10 +386,12 @@ export function PortfolioPage() {
                                 <TooltipTrigger asChild>
                                   <button
                                     aria-label={t("pf.deleteSr", { symbol })}
-                                    onClick={() => twoStepDelete(r.holding.id)}
+                                    onClick={() => {
+                                      if (deleteConfirm.confirm(r.holding.id)) remove(r.holding.id)
+                                    }}
                                     className={cn(
                                       "rounded p-1.5 transition-colors",
-                                      confirmDelete === r.holding.id
+                                      deleteConfirm.armed === r.holding.id
                                         ? "bg-down/15 text-down"
                                         : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                                     )}
@@ -621,7 +400,7 @@ export function PortfolioPage() {
                                   </button>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                  {confirmDelete === r.holding.id ? t("pf.deleteConfirm") : t("common.delete")}
+                                  {deleteConfirm.armed === r.holding.id ? t("pf.deleteConfirm") : t("common.delete")}
                                 </TooltipContent>
                               </Tooltip>
                             </div>
@@ -638,22 +417,17 @@ export function PortfolioPage() {
                   </p>
                   <button
                     onClick={() => {
-                      if (confirmClear) {
+                      if (clearConfirm.confirm(true)) {
                         clear()
-                        setConfirmClear(false)
                         setForm({ mode: "closed" })
-                      } else {
-                        setConfirmClear(true)
-                        if (clearTimer.current) clearTimeout(clearTimer.current)
-                        clearTimer.current = setTimeout(() => setConfirmClear(false), 2600)
                       }
                     }}
                     className={cn(
                       "font-mono text-[10px] tracking-wider uppercase transition-colors",
-                      confirmClear ? "text-down" : "text-muted-foreground/60 hover:text-down"
+                      clearConfirm.armed ? "text-down" : "text-muted-foreground/60 hover:text-down"
                     )}
                   >
-                    {confirmClear ? t("pf.clearConfirm") : t("pf.clear")}
+                    {clearConfirm.armed ? t("pf.clearConfirm") : t("pf.clear")}
                   </button>
                 </div>
               </CardContent>

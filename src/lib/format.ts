@@ -17,6 +17,19 @@ export function formatUsdCompact(v: number | null | undefined): string {
   return `$${v.toFixed(0)}`
 }
 
+/** 表单数字解析：容忍逗号小数点与首尾空白，非法输入返回 NaN（由调用方判 Number.isFinite） */
+export function parseNum(s: string): number {
+  return parseFloat(s.trim().replace(",", "."))
+}
+
+/** 数量格式化（持仓/换算器共用）：非有限值 →「—」，大数千分位，小数最多 8 位有效 */
+export function formatAmount(v: number): string {
+  if (!Number.isFinite(v)) return "—"
+  if (v === 0) return "0"
+  if (v >= 1) return v.toLocaleString("en-US", { maximumFractionDigits: 8 })
+  return v.toPrecision(4).replace(/\.?0+$/, "")
+}
+
 export function formatPct(v: number | null | undefined, digits = 2): string {
   if (v == null || Number.isNaN(v)) return "—"
   return `${v >= 0 ? "+" : ""}${v.toFixed(digits)}%`

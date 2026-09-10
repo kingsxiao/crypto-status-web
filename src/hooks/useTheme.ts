@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from "react"
 
+import { STORAGE_KEYS, storageGet, storageSet } from "@/lib/storage"
+
 /**
  * 三套主题（参考 shadcn/ui 官网 Themes）：每套在 index.css 中持有完整 token 集
  * （background/card/border/muted/primary/ring/chart-1~5），切换时全站联动。
@@ -14,7 +16,7 @@ export const THEMES = [
 
 export type ThemeId = (typeof THEMES)[number]["id"]
 
-const STORAGE_KEY = "crypto-status-theme"
+const STORAGE_KEY = STORAGE_KEYS.theme
 
 function normalize(v: string | null): ThemeId {
   return THEMES.some((t) => t.id === v) ? (v as ThemeId) : "mono"
@@ -31,11 +33,7 @@ const listeners = new Set<() => void>()
 
 function getSnapshot(): ThemeId {
   if (current == null) {
-    try {
-      current = normalize(localStorage.getItem(STORAGE_KEY))
-    } catch {
-      current = "mono"
-    }
+    current = normalize(storageGet(STORAGE_KEY))
   }
   return current
 }
@@ -44,11 +42,7 @@ export function setTheme(t: ThemeId) {
   if (t === getSnapshot()) return
   current = t
   document.documentElement.dataset.theme = t
-  try {
-    localStorage.setItem(STORAGE_KEY, t)
-  } catch {
-    /* 隐私模式等场景下静默降级为会话内生效 */
-  }
+  storageSet(STORAGE_KEY, t)
   listeners.forEach((l) => l())
 }
 

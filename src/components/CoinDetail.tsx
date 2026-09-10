@@ -28,6 +28,7 @@ import { analyzeCoin } from "@/lib/coinAnalysis"
 import { formatPrice, formatUsdCompact } from "@/lib/format"
 import { fetchCandles, mergeLiveTick, pollIntervalMs, type Candle } from "@/lib/kline"
 import { TRADE_SYMBOLS, type LiveTicker } from "@/lib/realtime"
+import { STORAGE_KEYS, storageGet, storageSet } from "@/lib/storage"
 import { cn } from "@/lib/utils"
 
 interface Props {
@@ -47,7 +48,7 @@ interface ChartPrefs {
   renderPref: "candles" | "line" | null
 }
 
-const PREFS_KEY = "crypto-status:chart-prefs"
+const PREFS_KEY = STORAGE_KEYS.chartPrefs
 const INTERVAL_KEYS = ["1s", "1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"] as const
 const RANGES = [100, 250, 500] as const
 
@@ -65,8 +66,8 @@ function loadPrefs(): ChartPrefs {
     panes: { rsi: true, macd: false, kdj: false },
     renderPref: null,
   }
+  const raw = storageGet(PREFS_KEY)
   try {
-    const raw = localStorage.getItem(PREFS_KEY)
     if (!raw) return fallback
     const p = JSON.parse(raw) as Partial<ChartPrefs>
     return {
@@ -133,11 +134,7 @@ export function CoinDetail({ coin, live, onBack }: Props) {
   const [renderPref, setRenderPref] = useState(prefs.renderPref)
 
   useEffect(() => {
-    try {
-      localStorage.setItem(PREFS_KEY, JSON.stringify({ intervalKey, range, overlays, panes, renderPref }))
-    } catch {
-      /* 隐私模式等场景静默失败 */
-    }
+    storageSet(PREFS_KEY, JSON.stringify({ intervalKey, range, overlays, panes, renderPref }))
   }, [intervalKey, range, overlays, panes, renderPref])
 
   const [candles, setCandles] = useState<Candle[] | null>(null)

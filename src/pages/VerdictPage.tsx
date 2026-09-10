@@ -166,7 +166,7 @@ function VerdictSkeleton() {
 
 export function VerdictPage() {
   useT()
-  usePageMeta({ title: t("meta.verdict") })
+  usePageMeta({ title: t("meta.verdict"), description: t("page.verdict.desc") })
   const { snapshot, error, loading, refresh } = useMarket()
 
   const [cross, setCross] = useState<CrossAssetData | null>(null)
@@ -176,10 +176,16 @@ export function VerdictPage() {
   // 请求代际：连点刷新时只采纳最后一次请求的结果，避免慢响应覆盖新数据
   const loadGenRef = useRef(0)
 
-  const loadCross = useCallback(() => {
+  const loadCross = useCallback((force = false) => {
     const gen = ++loadGenRef.current
     setCrossError(false)
-    fetchCrossAsset()
+    fetchCrossAsset({
+      force,
+      // 缓存过期路径：旧值先行渲染，后台刷新完成后送达新值（同样受代际保护）
+      onRefresh: (d) => {
+        if (gen === loadGenRef.current) setCross(d)
+      },
+    })
       .then((d) => {
         if (gen === loadGenRef.current) setCross(d)
       })
@@ -235,7 +241,7 @@ export function VerdictPage() {
         <Button
           onClick={() => {
             refresh()
-            loadCross()
+            loadCross(true)
           }}
           variant="outline"
           size="sm"
@@ -265,7 +271,7 @@ export function VerdictPage() {
           size="sm"
           onClick={() => {
             refresh()
-            loadCross()
+            loadCross(true)
           }}
           className="gap-1.5"
         >

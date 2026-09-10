@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useMemo, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import {
   BellPlus,
@@ -36,6 +36,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useLive, useMarket } from "@/context/MarketDataContext"
 import { dateLocale, t, useT } from "@/i18n"
 import { usePageMeta } from "@/hooks/usePageMeta"
+import { useTwoStepConfirm } from "@/hooks/useTwoStepConfirm"
 import {
   distancePct,
   MAX_ALERTS,
@@ -45,12 +46,8 @@ import {
   useAlerts,
   type AlertKind,
 } from "@/lib/alerts"
-import { formatPrice } from "@/lib/format"
+import { formatPrice, parseNum } from "@/lib/format"
 import { cn } from "@/lib/utils"
-
-function parseNum(s: string): number {
-  return parseFloat(s.trim().replace(",", "."))
-}
 
 function formatDateTime(ts: number): string {
   return new Date(ts).toLocaleString(dateLocale(), {
@@ -77,7 +74,7 @@ function KindBadge({ kind }: { kind: AlertKind }) {
 
 export function AlertsPage() {
   useT()
-  usePageMeta({ title: t("meta.alerts") })
+  usePageMeta({ title: t("meta.alerts"), description: t("page.alerts.desc") })
   const { snapshot, loading } = useMarket()
   const tickers = useLive()
   const { alerts, add, remove, rearm, clearTriggered, sound, setSound } = useAlerts()
@@ -91,16 +88,9 @@ export function AlertsPage() {
   const [price, setPrice] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [permTick, setPermTick] = useState(0)
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
-  const [confirmClear, setConfirmClear] = useState(false)
-  // 卸载时清掉待执行的确认复位 timer，与 PortfolioPage 同一套防御
-  const deleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => () => {
-    if (deleteTimer.current) clearTimeout(deleteTimer.current)
-    if (clearTimer.current) clearTimeout(clearTimer.current)
-  }, [])
+  // 两个二次确认各自独立实例（与 PortfolioPage 同一套防御）
+  const deleteConfirm = useTwoStepConfirm<string>()
+  const clearConfirm = useTwoStepConfirm<true>()
 
   const active = useMemo(() => alerts.filter((a) => a.status === "active"), [alerts])
   const triggered = useMemo(
@@ -152,17 +142,6 @@ export function AlertsPage() {
     setKind(mult > 1 ? "above" : "below")
     setPrice((curPrice * mult).toFixed(curPrice >= 1000 ? 0 : 2))
     setError(null)
-  }
-
-  const twoStepDelete = (id: string) => {
-    if (confirmDelete === id) {
-      remove(id)
-      setConfirmDelete(null)
-    } else {
-      setConfirmDelete(id)
-      if (deleteTimer.current) clearTimeout(deleteTimer.current)
-      deleteTimer.current = setTimeout(() => setConfirmDelete((cur) => (cur === id ? null : cur)), 2600)
-    }
   }
 
   /* ------------------------------ 加载骨架 ------------------------------ */
@@ -434,10 +413,12 @@ export function AlertsPage() {
                           <TooltipTrigger asChild>
                             <button
                               aria-label={t("al.deleteSr", { symbol: a.symbol })}
-                              onClick={() => twoStepDelete(a.id)}
+                              onClick={() => {
+                                if (deleteConfirm.confirm(a.id)) remove(a.id)
+                              }}
                               className={cn(
                                 "ml-auto flex rounded p-1.5 transition-colors",
-                                confirmDelete === a.id
+                                deleteConfirm.armed === a.id
                                   ? "bg-down/15 text-down"
                                   : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                               )}
@@ -446,7 +427,7 @@ export function AlertsPage() {
                             </button>
                           </TooltipTrigger>
                           <TooltipContent>
-                            {confirmDelete === a.id ? t("pf.deleteConfirm") : t("common.delete")}
+                            {deleteConfirm.armed === a.id ? t("pf.deleteConfirm") : t("common.delete")}
                           </TooltipContent>
                         </Tooltip>
                       </TableCell>
@@ -466,21 +447,14 @@ export function AlertsPage() {
             {triggered.length > 0 && (
               <button
                 onClick={() => {
-                  if (confirmClear) {
-                    clearTriggered()
-                    setConfirmClear(false)
-                  } else {
-                    setConfirmClear(true)
-                    if (clearTimer.current) clearTimeout(clearTimer.current)
-                    clearTimer.current = setTimeout(() => setConfirmClear(false), 2600)
-                  }
+                  if (clearConfirm.confirm(true)) clearTriggered()
                 }}
                 className={cn(
                   "font-mono text-[10px] tracking-wider uppercase transition-colors",
-                  confirmClear ? "text-down" : "text-muted-foreground/60 hover:text-down"
+                  clearConfirm.armed ? "text-down" : "text-muted-foreground/60 hover:text-down"
                 )}
               >
-                {confirmClear ? t("al.history.clearConfirm") : t("al.history.clear")}
+                {clearConfirm.armed ? t("al.history.clearConfirm") : t("al.history.clear")}
               </button>
             )}
           </CardHead>
@@ -544,22 +518,24 @@ export function AlertsPage() {
                         </Tooltip>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <button
-                              aria-label={t("al.deleteSr", { symbol: a.symbol })}
-                              onClick={() => twoStepDelete(a.id)}
-                              className={cn(
-                                "rounded p-1.5 transition-colors",
-                                confirmDelete === a.id
-                                  ? "bg-down/15 text-down"
-                                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                              )}
-                            >
-                              <Trash2 className="size-3.5" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {confirmDelete === a.id ? t("pf.deleteConfirm") : t("common.delete")}
-                          </TooltipContent>
+                        <button
+                          aria-label={t("al.deleteSr", { symbol: a.symbol })}
+                          onClick={() => {
+                            if (deleteConfirm.confirm(a.id)) remove(a.id)
+                          }}
+                          className={cn(
+                            "rounded p-1.5 transition-colors",
+                            deleteConfirm.armed === a.id
+                              ? "bg-down/15 text-down"
+                              : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                          )}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {deleteConfirm.armed === a.id ? t("pf.deleteConfirm") : t("common.delete")}
+                      </TooltipContent>
                         </Tooltip>
                       </div>
                     </TableCell>

@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useState } from "react"
 
 import { eventStartMs, type MarketEvent } from "@/lib/events"
+import { STORAGE_KEYS, storageGet, storageSet } from "@/lib/storage"
 
 /** 提前多少毫秒提醒 */
 export const REMINDER_LEAD_MS = 10 * 60_000
@@ -23,8 +24,10 @@ export interface ReminderEntry {
 
 export type ReminderMap = Record<string, ReminderEntry>
 
-const STORAGE_KEY = "crypto-status:event-reminders"
-const EVENT = "crypto-status:event-reminders-change"
+const STORAGE_KEY = STORAGE_KEYS.eventReminders
+/** 库变更事件（页内写库后派发）；触发引擎订阅它重读，免去每秒 JSON.parse */
+export const REMINDERS_CHANGE_EVENT = "crypto-status:event-reminders-change"
+const EVENT = REMINDERS_CHANGE_EVENT
 
 function sanitize(raw: unknown): ReminderMap {
   const out: ReminderMap = {}
@@ -41,22 +44,17 @@ function sanitize(raw: unknown): ReminderMap {
 }
 
 export function readReminders(): ReminderMap {
-  if (typeof localStorage === "undefined") return {}
+  const raw = storageGet(STORAGE_KEY)
   try {
-    return sanitize(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}"))
+    return sanitize(JSON.parse(raw ?? "{}"))
   } catch {
     return {}
   }
 }
 
 function write(map: ReminderMap) {
-  if (typeof localStorage === "undefined") return
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(map))
-  } catch {
-    /* 隐私模式等场景静默失败 */
-  }
-  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(EVENT))
+  storageSet(STORAGE_KEY, JSON.stringify(map))
+  window.dispatchEvent(new CustomEvent(EVENT))
 }
 
 /** 开关某事件的提醒；返回开关后的状态（true = 已开启） */

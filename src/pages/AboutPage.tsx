@@ -28,7 +28,7 @@ const STACK = ["React 19", "TypeScript", "Vite 7", "Tailwind CSS 4", "React Rout
 
 export function AboutPage() {
   useT()
-  usePageMeta({ title: t("meta.about") })
+  usePageMeta({ title: t("meta.about"), description: t("page.about.desc") })
   const { theme } = useTheme()
   const themeLabel = THEMES.find((th) => th.id === theme)?.en ?? "MONO"
 

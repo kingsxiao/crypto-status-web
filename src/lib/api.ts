@@ -5,10 +5,10 @@
  *  3. Binance REST : CoinGecko 限流/不可用时的行情与日线兜底
  */
 
+import { fetchCG } from "@/lib/cg"
 import { fetchJSON } from "@/lib/http"
 import { TRADE_SYMBOLS } from "@/lib/realtime"
 
-const CG = "https://api.coingecko.com/api/v3"
 const FNG = "https://api.alternative.me/fng/"
 const BINANCE = "https://api.binance.com/api/v3"
 
@@ -75,15 +75,15 @@ const COIN_IDS = [
 export const STABLECOIN_IDS = new Set(["tether", "usd-coin"])
 
 function fetchCoins(): Promise<Coin[]> {
-  const url =
-    `${CG}/coins/markets?vs_currency=usd&order=market_cap_desc` +
+  const path =
+    `/coins/markets?vs_currency=usd&order=market_cap_desc` +
     `&ids=${COIN_IDS.join(",")}&sparkline=true` +
     `&price_change_percentage=1h,24h,7d,30d`
-  return fetchJSON<Coin[]>(url)
+  return fetchCG<Coin[]>(path)
 }
 
 function fetchGlobal(): Promise<GlobalData> {
-  return fetchJSON<{
+  return fetchCG<{
     data: {
       total_market_cap: Record<string, number>
       total_volume: Record<string, number>
@@ -91,7 +91,7 @@ function fetchGlobal(): Promise<GlobalData> {
       market_cap_percentage: Record<string, number>
       active_cryptocurrencies: number
     }
-  }>(`${CG}/global`).then((d) => ({
+  }>(`/global`).then((d) => ({
     total_market_cap_usd: d.data.total_market_cap.usd,
     total_volume_usd: d.data.total_volume.usd,
     market_cap_change_24h_pct:
@@ -115,8 +115,8 @@ function fetchFng(): Promise<FearGreedEntry[]> {
 }
 
 function fetchBtcChart(): Promise<MarketChart> {
-  return fetchJSON<MarketChart>(
-    `${CG}/coins/bitcoin/market_chart?vs_currency=usd&days=365&interval=daily`
+  return fetchCG<MarketChart>(
+    `/coins/bitcoin/market_chart?vs_currency=usd&days=365&interval=daily`
   )
 }
 

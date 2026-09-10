@@ -4,12 +4,14 @@
 
 import { useCallback, useEffect, useState } from "react"
 
-const STORAGE_KEY = "crypto-status:favorites"
+import { STORAGE_KEYS, storageGet, storageSet } from "@/lib/storage"
+
+const STORAGE_KEY = STORAGE_KEYS.favorites
 const EVENT = "crypto-status:favorites-change"
 
 function read(): string[] {
+  const raw = storageGet(STORAGE_KEY)
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
     const arr = raw ? JSON.parse(raw) : []
     return Array.isArray(arr) ? arr.filter((x) => typeof x === "string") : []
   } catch {
@@ -18,11 +20,7 @@ function read(): string[] {
 }
 
 function write(ids: string[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(ids))
-  } catch {
-    /* 隐私模式等场景静默失败 */
-  }
+  storageSet(STORAGE_KEY, JSON.stringify(ids))
   window.dispatchEvent(new CustomEvent(EVENT))
 }
 

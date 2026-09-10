@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from "react"
 
+import { STORAGE_KEYS, storageGet, storageSet } from "@/lib/storage"
+
 import { en } from "./en"
 import { zh, type MessageKey } from "./zh"
 
@@ -21,7 +23,7 @@ export const LOCALES = [
 
 export type Locale = (typeof LOCALES)[number]["id"]
 
-const STORAGE_KEY = "crypto-status-locale"
+const STORAGE_KEY = STORAGE_KEYS.locale
 
 /** 可翻译消息：lib 层输出 key + 中性参数，渲染层由 tm() 还原为文案 */
 export interface LMsg {
@@ -48,21 +50,10 @@ const listeners = new Set<() => void>()
 
 function getSnapshot(): Locale {
   if (current == null) {
-    let v: Locale | null = null
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      v = raw === "zh" || raw === "en" ? raw : null
-    } catch {
-      /* 隐私模式等场景读取失败，走检测 */
-    }
-    if (v == null) {
-      v = detectLocale()
-      try {
-        localStorage.setItem(STORAGE_KEY, v)
-      } catch {
-        /* 写不进则仅会话内生效 */
-      }
-    }
+    const raw = storageGet(STORAGE_KEY)
+    const stored = raw === "zh" || raw === "en"
+    const v: Locale = stored ? raw : detectLocale()
+    if (!stored) storageSet(STORAGE_KEY, v) // 首访检测出的默认语言落盘
     current = v
     document.documentElement.lang = v === "zh" ? "zh-CN" : "en"
   }
@@ -73,11 +64,7 @@ export function setLocale(l: Locale) {
   if (l === getSnapshot()) return
   current = l
   document.documentElement.lang = l === "zh" ? "zh-CN" : "en"
-  try {
-    localStorage.setItem(STORAGE_KEY, l)
-  } catch {
-    /* 隐私模式等场景下静默降级为会话内生效 */
-  }
+  storageSet(STORAGE_KEY, l)
   listeners.forEach((fn) => fn())
 }
 

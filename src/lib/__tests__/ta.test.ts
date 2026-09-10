@@ -54,7 +54,8 @@ describe("macdSeries", () => {
     for (let i = 25; i < values.length; i++) {
       expect(hist[i]).toBeCloseTo((dif[i] as number) - (dea[i] as number))
     }
-    // 暖期（DIF 未定义前）DEA/HIST 均为 null
+    // 暖期（EMA26 未收敛前）DIF/DEA/HIST 均为 null
+    expect(dif[24]).toBeNull()
     expect(dea[24]).toBeNull()
     expect(hist[24]).toBeNull()
   })

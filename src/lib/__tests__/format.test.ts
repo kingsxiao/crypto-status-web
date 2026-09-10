@@ -1,8 +1,32 @@
 import { describe, expect, it } from "vitest"
 
-import { formatPct, formatPrice, formatTime, formatUsdCompact, formatWatchTitle } from "@/lib/format"
+import { formatAmount, formatPct, formatPrice, formatTime, formatUsdCompact, formatWatchTitle, parseNum } from "@/lib/format"
 import { mergeLiveTick } from "@/lib/kline"
 import { toNum } from "@/lib/http"
+
+describe("parseNum 表单数字解析", () => {
+  it("容忍逗号小数点与首尾空白", () => {
+    expect(parseNum("1.5")).toBe(1.5)
+    expect(parseNum(" 1,5 ")).toBe(1.5)
+    expect(parseNum("1234")).toBe(1234)
+  })
+  it("非法输入返回 NaN，由调用方判 Number.isFinite", () => {
+    expect(Number.isNaN(parseNum(""))).toBe(true)
+    expect(Number.isNaN(parseNum("abc"))).toBe(true)
+  })
+})
+
+describe("formatAmount 数量格式化", () => {
+  it("非有限值 → 占位符；0 → \"0\"", () => {
+    expect(formatAmount(Number.NaN)).toBe("—")
+    expect(formatAmount(0)).toBe("0")
+  })
+  it("大数千分位，小数最多 8 位有效", () => {
+    expect(formatAmount(1234567.89)).toBe("1,234,567.89")
+    expect(formatAmount(0.000123456789)).toBe("0.0001235")
+    expect(formatAmount(0.5)).toBe("0.5")
+  })
+})
 
 describe("formatPrice 自适应位数", () => {
   it("千位以上 2 位小数带分节", () => {

@@ -33,26 +33,27 @@ type SortKey =
 
 type SortDir = "asc" | "desc"
 
-function coinValue(c: Coin, key: SortKey, livePrice: number | null): number {
+/** 排序取值：缺失（Binance 兜底数据源无 1h/7d/30d 涨跌、无 ATH）返回 null，由比较器统一压到末尾 */
+function coinValue(c: Coin, key: SortKey, livePrice: number | null): number | null {
   switch (key) {
     case "rank":
       return c.market_cap_rank
     case "price":
       return livePrice ?? c.current_price
     case "chg1h":
-      return c.price_change_percentage_1h_in_currency ?? 0
+      return c.price_change_percentage_1h_in_currency ?? null
     case "chg24h":
-      return c.price_change_percentage_24h_in_currency ?? 0
+      return c.price_change_percentage_24h_in_currency ?? null
     case "chg7d":
-      return c.price_change_percentage_7d_in_currency ?? 0
+      return c.price_change_percentage_7d_in_currency ?? null
     case "chg30d":
-      return c.price_change_percentage_30d_in_currency ?? 0
+      return c.price_change_percentage_30d_in_currency ?? null
     case "marketCap":
       return c.market_cap
     case "volume":
       return c.total_volume
     case "ath":
-      return c.ath_change_percentage ?? -Infinity
+      return c.ath_change_percentage ?? null
   }
 }
 
@@ -108,7 +109,7 @@ function WatchStar({ active, onToggle }: { active: boolean; onToggle: () => void
 
 export function MarketsPage() {
   useT()
-  usePageMeta({ title: t("meta.markets") })
+  usePageMeta({ title: t("meta.markets"), description: t("page.markets.desc") })
   const { snapshot, loading } = useMarket()
   const tickers = useLive()
   const navigate = useNavigate()
@@ -128,7 +129,14 @@ export function MarketsPage() {
     if (scope === "favorites") list = list.filter((c) => has(c.id))
     if (q) list = list.filter((c) => c.name.toLowerCase().includes(q) || c.symbol.toLowerCase().includes(q))
     const sorted = [...list].sort((a, b) => {
-      const d = coinValue(a, sortKey, tickers[a.id]?.price ?? null) - coinValue(b, sortKey, tickers[b.id]?.price ?? null)
+      const va = coinValue(a, sortKey, tickers[a.id]?.price ?? null)
+      const vb = coinValue(b, sortKey, tickers[b.id]?.price ?? null)
+      // 缺失值不与真实 0 混排：无论升序降序恒排末尾
+      if (va == null || vb == null) {
+        if (va == null && vb == null) return 0
+        return va == null ? 1 : -1
+      }
+      const d = va - vb
       return sortDir === "asc" ? d : -d
     })
     return sorted

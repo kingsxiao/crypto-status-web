@@ -5,6 +5,7 @@ import react from "@vitejs/plugin-react"
 import { defineConfig, type Plugin } from "vite"
 import { compression } from "vite-plugin-compression2"
 import { visualizer } from "rollup-plugin-visualizer"
+import { VitePWA } from "vite-plugin-pwa"
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -15,11 +16,46 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    // PWA：预缓存应用壳（构建产物），可安装 + 弱网兜底。
+    // 行情 API 一律不缓存（避免陈旧价格误导）；币种图标走 SWR 纯静态资源。
+    // manifest 的 start_url/scope 由插件按 base 自动带前缀。
+    VitePWA({
+      registerType: "autoUpdate",
+      includeAssets: ["apple-touch-icon.png"],
+      manifest: {
+        name: "CRYPTO STATUS · 加密货币市场状态",
+        short_name: "CRYPTO STATUS",
+        description: "实时价格、牛熊周期、多空信号与市场情绪的加密货币市场状态仪表盘",
+        lang: "zh-CN",
+        theme_color: "#171717",
+        background_color: "#0a0a0a",
+        display: "standalone",
+        icons: [
+          { src: "icon-192.png", sizes: "192x192", type: "image/png" },
+          { src: "icon-512.png", sizes: "512x512", type: "image/png" },
+          { src: "icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+        ],
+      },
+      workbox: {
+        navigateFallback: "index.html",
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/coin-images\.coingecko\.com\//,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "coin-images",
+              expiration: { maxEntries: 120, maxAgeSeconds: 60 * 60 * 24 * 14 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
+      },
+    }),
     // 预压缩产物：.gz 供 nginx gzip_static / 静态托管直接下发（省去运行时压缩），
     // .br 是 Brotli，比 gzip 再小 ~15%，现代浏览器都支持。
     compression({
       algorithms: ["gzip", "brotli"],
-      exclude: [/\.map$/, /\.br$/, /\.gz$/],
+      exclude: [/\.map$/, /\.br$/, /\.gz$/, /^sw\.js$/, /workbox/],
     }),
     // ANALYZE=1 npm run build 时输出 dist/stats.html 体积构成报告
     process.env.ANALYZE

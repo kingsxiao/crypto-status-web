@@ -143,7 +143,7 @@ function DashboardSkeleton() {
 
 export function DashboardPage() {
   useT()
-  usePageMeta({ title: t("meta.dashboard") })
+  usePageMeta({ title: t("meta.dashboard"), description: t("page.dashboard.desc") })
   const { snapshot, error, loading, refresh, patchedChart, analysis } = useMarket()
   const tickers = useLive()
   const navigate = useNavigate()

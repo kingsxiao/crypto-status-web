@@ -6,6 +6,8 @@
 
 import { useCallback, useEffect, useState } from "react"
 
+import { STORAGE_KEYS, storageGet, storageSet } from "@/lib/storage"
+
 /** 一条持仓：每币种一行（重复添加走编辑合并） */
 export interface Holding {
   /** coin id，如 "bitcoin" */
@@ -17,7 +19,7 @@ export interface Holding {
   addedAt: number
 }
 
-const STORAGE_KEY = "crypto-status:portfolio"
+const STORAGE_KEY = STORAGE_KEYS.portfolio
 const EVENT = "crypto-status:portfolio-change"
 
 function sanitizeHolding(raw: unknown): Holding | null {
@@ -36,8 +38,8 @@ function sanitizeHolding(raw: unknown): Holding | null {
 }
 
 function read(): Holding[] {
+  const raw = storageGet(STORAGE_KEY)
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
     const arr = raw ? JSON.parse(raw) : []
     if (!Array.isArray(arr)) return []
     return arr
@@ -50,11 +52,7 @@ function read(): Holding[] {
 }
 
 function write(list: Holding[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
-  } catch {
-    /* 隐私模式等场景静默失败 */
-  }
+  storageSet(STORAGE_KEY, JSON.stringify(list))
   window.dispatchEvent(new CustomEvent(EVENT))
 }
 

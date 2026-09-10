@@ -78,40 +78,33 @@ export function rsiSeries(values: number[], period = 14): Series {
   return out
 }
 
-/** MACD 序列：DIF / DEA / HIST */
+/**
+ * MACD 序列：DIF / DEA / HIST。
+ * DIF = EMA(fast) − EMA(slow)，两条 EMA 都走带暖机的 emaSeries，
+ * 因此 DIF/DEA/HIST 统一从 slow−1 起有值 —— 旧实现从第 0 点就
+ * 用未收敛的 EMA 递推 DIF，与文件头「暖机期前置 null」的承诺不符。
+ */
 export function macdSeries(values: number[], fast = 12, slow = 26, signal = 9) {
-  const emaFast = emaSeriesFill(values, fast)
-  const emaSlow = emaSeriesFill(values, slow)
+  const emaFast = emaSeries(values, fast)
+  const emaSlow = emaSeries(values, slow)
   const n = values.length
   const dif: Series = new Array(n).fill(null)
-  for (let i = 0; i < n; i++) dif[i] = emaFast[i] - emaSlow[i]
-  // DEA 为 DIF 的 EMA（自 DIF 首个有效点起算）
-  const firstIdx = slow - 1
   const dea: Series = new Array(n).fill(null)
   const hist: Series = new Array(n).fill(null)
-  if (n > firstIdx) {
   const k = 2 / (signal + 1)
-  let prev: number = dif[firstIdx] as number
-  dea[firstIdx] = prev
-  for (let i = firstIdx + 1; i < n; i++) {
-    prev = (dif[i] as number) * k + prev * (1 - k)
+  let prev: number | null = null
+  for (let i = slow - 1; i < n; i++) {
+    const f = emaFast[i]
+    const s = emaSlow[i]
+    if (f == null || s == null) continue
+    const d = f - s
+    dif[i] = d
+    // DEA 为 DIF 的 EMA，自 DIF 首个有效点起算
+    prev = prev == null ? d : d * k + prev * (1 - k)
     dea[i] = prev
-  }
-    for (let i = firstIdx; i < n; i++) hist[i] = (dif[i] as number) - (dea[i] as number)
+    hist[i] = d - prev
   }
   return { dif, dea, hist }
-}
-
-/** 全量填充的 EMA（内部用：从首个值直接递推，避免 null 参与运算） */
-function emaSeriesFill(values: number[], period: number): number[] {
-  const k = 2 / (period + 1)
-  const out: number[] = []
-  let prev = values[0]
-  for (let i = 0; i < values.length; i++) {
-    prev = i === 0 ? values[0] : values[i] * k + prev * (1 - k)
-    out.push(prev)
-  }
-  return out
 }
 
 /** 斐波那契回撤档位（0=趋势终点，1=趋势起点，TradingView 惯例） */

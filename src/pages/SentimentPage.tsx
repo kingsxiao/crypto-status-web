@@ -25,7 +25,7 @@ function useFmtDate() {
 export function SentimentPage() {
   useT()
   const fmtDate = useFmtDate()
-  usePageMeta({ title: t("meta.sentiment") })
+  usePageMeta({ title: t("meta.sentiment"), description: t("page.sentiment.desc") })
   const { snapshot, loading, analysis } = useMarket()
   const tickers = useLive()
   const fng = useMemo(() => snapshot?.fng ?? [], [snapshot])

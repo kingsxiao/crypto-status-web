@@ -8,6 +8,8 @@ dist-ssr/
 # test / tooling artifacts
 .playwright-mcp/
 coverage/
+playwright-report/
+test-results/
 
 # editor & os
 .vscode/*

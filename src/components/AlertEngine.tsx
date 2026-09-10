@@ -8,11 +8,11 @@
  * 只在本页打开期间工作 —— 纯前端静态站的固有限制，页面文案已如实披露。
  */
 
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 
 import { useLive } from "@/context/MarketDataContext"
 import { t } from "@/i18n"
-import { isTriggered, readAlerts, readSound, markTriggered } from "@/lib/alerts"
+import { ALERTS_CHANGE_EVENT, isTriggered, readAlerts, readSound, markTriggered, type AlertRule } from "@/lib/alerts"
 import { alertBeep } from "@/lib/beep"
 import { pushToast } from "@/components/ui/toast"
 import { formatPrice } from "@/lib/format"
@@ -62,9 +62,25 @@ function fireAlert(
 export function AlertEngine() {
   const tickers = useLive()
 
+  // 规则簿镜像：挂载与库变更（页内写库派发 ALERTS_CHANGE_EVENT、跨标签 storage
+  // 事件）时重读。旧实现每秒随行情刷新 JSON.parse 整个规则簿 —— 读取频率应
+  // 跟着「规则变了没有」走，而不是跟着「价格变了没有」走。
+  const rulesRef = useRef<AlertRule[]>([])
   useEffect(() => {
-    // 直接读库而非闭包 state：规则编辑与引擎检查解耦，避免 effect 依赖抖动
-    const rules = readAlerts()
+    const sync = () => {
+      rulesRef.current = readAlerts()
+    }
+    sync()
+    window.addEventListener(ALERTS_CHANGE_EVENT, sync)
+    window.addEventListener("storage", sync)
+    return () => {
+      window.removeEventListener(ALERTS_CHANGE_EVENT, sync)
+      window.removeEventListener("storage", sync)
+    }
+  }, [])
+
+  useEffect(() => {
+    const rules = rulesRef.current
     if (rules.length === 0) return
     for (const rule of rules) {
       if (rule.status !== "active") continue

@@ -71,6 +71,7 @@ export const en = {
   "meta.converter": "Converter · CRYPTO STATUS",
   "meta.about": "About · CRYPTO STATUS",
   "meta.coin": "Coin detail · CRYPTO STATUS",
+  "meta.coin.desc": "Live price, multi-timeframe candles and long/short opinion board",
 
   /* ------------------------------ Dashboard ------------------------------ */
   "page.dashboard.title": "Market Overview",
@@ -396,6 +397,7 @@ export const en = {
 
   /* ------------------------------ About page ------------------------------ */
   "page.about.title": "About",
+  "page.about.desc": "About this project, data sources and tech stack",
   "about.what.title": "What is this",
   "about.what.desc": "A pure-frontend crypto market status board",
   "about.what.p1":

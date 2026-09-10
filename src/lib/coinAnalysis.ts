@@ -23,6 +23,7 @@ import {
   type IndicatorResult,
 } from "./indicators"
 import type { MessageKey } from "@/i18n"
+import { TECH_TIERS } from "@/lib/thresholds"
 
 export type VerdictLevel = "strong-long" | "long" | "neutral" | "short" | "strong-short"
 
@@ -67,10 +68,10 @@ export function verdictOfScore(score: number): { level: ScoreLevel; tone: "bull"
 
 export function verdictOfComposite(composite: number): CoinAnalysis["verdict"] {
   const level: VerdictLevel =
-    composite >= 40 ? "strong-long"
-    : composite >= 15 ? "long"
-    : composite > -15 ? "neutral"
-    : composite > -40 ? "short"
+    composite >= TECH_TIERS.strong ? "strong-long"
+    : composite >= TECH_TIERS.weak ? "long"
+    : composite > -TECH_TIERS.weak ? "neutral"
+    : composite > -TECH_TIERS.strong ? "short"
     : "strong-short"
   return { level }
 }

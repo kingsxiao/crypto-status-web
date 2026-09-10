@@ -9,6 +9,8 @@
 
 import { useCallback, useEffect, useState } from "react"
 
+import { STORAGE_KEYS, storageGet, storageSet } from "@/lib/storage"
+
 export type AlertKind = "above" | "below"
 export type AlertStatus = "active" | "triggered"
 
@@ -26,9 +28,11 @@ export interface AlertRule {
   triggeredPrice: number | null
 }
 
-const STORAGE_KEY = "crypto-status:alerts"
-const SOUND_KEY = "crypto-status:alert-sound"
-const EVENT = "crypto-status:alerts-change"
+const STORAGE_KEY = STORAGE_KEYS.alerts
+const SOUND_KEY = STORAGE_KEYS.alertSound
+/** 库变更事件（页内写库后派发）；触发引擎订阅它重读，免去每秒 JSON.parse */
+export const ALERTS_CHANGE_EVENT = "crypto-status:alerts-change"
+const EVENT = ALERTS_CHANGE_EVENT
 
 /** 规则数上限：防止 localStorage 无限增长，也避免表格失控 */
 export const MAX_ALERTS = 30
@@ -58,8 +62,8 @@ function sanitizeRule(raw: unknown): AlertRule | null {
 }
 
 function read(): AlertRule[] {
+  const raw = storageGet(STORAGE_KEY)
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
     const arr = raw ? JSON.parse(raw) : []
     if (!Array.isArray(arr)) return []
     return arr.map(sanitizeRule).filter((a): a is AlertRule => a !== null)
@@ -69,11 +73,7 @@ function read(): AlertRule[] {
 }
 
 function write(list: AlertRule[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
-  } catch {
-    /* 隐私模式等场景静默失败 */
-  }
+  storageSet(STORAGE_KEY, JSON.stringify(list))
   window.dispatchEvent(new CustomEvent(EVENT))
 }
 
@@ -84,19 +84,11 @@ export function readAlerts(): AlertRule[] {
 /* ------------------------------ 提示音开关 ------------------------------ */
 
 export function readSound(): boolean {
-  try {
-    return localStorage.getItem(SOUND_KEY) !== "0"
-  } catch {
-    return true
-  }
+  return storageGet(SOUND_KEY) !== "0"
 }
 
 function writeSound(on: boolean) {
-  try {
-    localStorage.setItem(SOUND_KEY, on ? "1" : "0")
-  } catch {
-    /* 静默失败 */
-  }
+  storageSet(SOUND_KEY, on ? "1" : "0")
   window.dispatchEvent(new CustomEvent(EVENT))
 }
 

@@ -69,6 +69,7 @@ export const zh = {
   "meta.converter": "换算器 · CRYPTO STATUS",
   "meta.about": "关于 · CRYPTO STATUS",
   "meta.coin": "币种详情 · CRYPTO STATUS",
+  "meta.coin.desc": "币种实时价格、多周期K线与多空观点看板",
 
   /* ------------------------------ 总览页 ------------------------------ */
   "page.dashboard.title": "市场总览",
@@ -393,6 +394,7 @@ export const zh = {
 
   /* ------------------------------ 关于页 ------------------------------ */
   "page.about.title": "关于",
+  "page.about.desc": "项目说明、数据来源与技术栈",
   "about.what.title": "这是什么",
   "about.what.desc": "一个纯前端的加密货币市场状态看板",
   "about.what.p1":
