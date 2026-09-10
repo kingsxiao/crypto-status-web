@@ -10,7 +10,8 @@ export default defineConfig({
   expect: { timeout: 30_000 },
   retries: process.env.CI ? 1 : 0,
   workers: 1,
-  reporter: process.env.CI ? "github" : "list",
+  // CI 附加 html reporter：失败时产出 playwright-report/ 供 workflow 上传 artifact
+  reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
   use: {
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:4173",
     // 中文断言依赖 locale（zh 文案按 navigator.language 取词）
