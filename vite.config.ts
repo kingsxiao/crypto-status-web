@@ -38,6 +38,22 @@ export default defineConfig({
       },
       workbox: {
         navigateFallback: "index.html",
+        // 预缓存只装应用壳 —— index.html 直接引用的入口 JS/CSS/react-vendor
+        // 加图标与清单（懒加载页面 chunk 一律不进安装清单）。此前默认
+        // globPatterns 把全部页面 chunk 也算进 SW 安装量（32 entries /
+        // 705 KiB），首访安装与首屏行情 API 抢带宽；收窄后页面 chunk 首访
+        // 经下方 assets 的 SWR 规则按需落缓存，二访起同样离线可用。
+        globPatterns: [
+          "index.html",
+          "registerSW.js",
+          "manifest.webmanifest",
+          "assets/index-*.js",
+          "assets/index-*.css",
+          "assets/react-vendor-*.js",
+          "icon-192.png",
+          "icon-512.png",
+          "apple-touch-icon.png",
+        ],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/coin-images\.coingecko\.com\//,
@@ -47,6 +63,13 @@ export default defineConfig({
               expiration: { maxEntries: 120, maxAgeSeconds: 60 * 60 * 24 * 14 },
               cacheableResponse: { statuses: [0, 200] },
             },
+          },
+          {
+            // 应用自身静态资源（预缓存之外的页面/共享 chunk 等）：
+            // SWR 先回缓存再看网络，二次访问起页面切换即时渲染且离线可用
+            urlPattern: /\/assets\/.+\.(js|css|png|svg|woff2?)$/,
+            handler: "StaleWhileRevalidate",
+            options: { cacheName: "app-assets" },
           },
         ],
       },
@@ -91,6 +114,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    // .tsx 组件测试经文件首行 @vitest-environment jsdom pragma 切环境
+    // （realtime.test.ts 先例），全局保持 node 以覆盖纯逻辑模块
+    include: ["src/**/*.test.{ts,tsx}"],
   },
 })

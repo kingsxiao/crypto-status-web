@@ -6,6 +6,7 @@ import {
   Info,
   LayoutDashboard,
   Scale,
+  Settings,
   Table2,
   Wallet,
 } from "lucide-react"
@@ -21,4 +22,5 @@ export const NAV_ITEMS = [
   { to: "/portfolio", key: "nav.portfolio", en: "PORTFOLIO", icon: Wallet },
   { to: "/alerts", key: "nav.alerts", en: "ALERTS", icon: BellRing },
   { to: "/about", key: "nav.about", en: "ABOUT", icon: Info },
+  { to: "/settings", key: "nav.settings", en: "SETTINGS", icon: Settings },
 ] as const

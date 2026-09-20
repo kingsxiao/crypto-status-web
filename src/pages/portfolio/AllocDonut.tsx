@@ -1,8 +1,15 @@
 /** 配置环形图：SVG 圆环按占比分段（dasharray 直接用百分比） */
 
+import { memo } from "react"
+
 import { t } from "@/i18n"
 
-export function AllocDonut({ slices }: { slices: { key: string; pct: number; color: string }[] }) {
+/** memo：slices 引用稳定时（见 PortfolioPage 的 useMemo）跳过秒级推送带来的重算 */
+export const AllocDonut = memo(function AllocDonut({
+  slices,
+}: {
+  slices: { key: string; pct: number; color: string }[]
+}) {
   const r = 15.9155 // 周长恰为 100，dasharray 直接用百分比
   // 预计算每段起点（累计百分比），避免渲染期变量重赋值
   const segments = slices.reduce<{ key: string; pct: number; color: string; start: number }[]>(
@@ -37,4 +44,4 @@ export function AllocDonut({ slices }: { slices: { key: string; pct: number; col
       </svg>
     </div>
   )
-}
+})

@@ -11,6 +11,11 @@ coverage/
 playwright-report/
 test-results/
 
+# local agent/tool draft dirs（与 eslint ignores 保持一致）
+.zcode/
+.v2c/
+.video_agent/
+
 # editor & os
 .vscode/*
 !.vscode/extensions.json

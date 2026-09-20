@@ -26,6 +26,18 @@ describe("formatAmount 数量格式化", () => {
     expect(formatAmount(0.000123456789)).toBe("0.0001235")
     expect(formatAmount(0.5)).toBe("0.5")
   })
+  it("极小数量定点展开：无科学计数法，1e-9 不被截断为 \"0\"", () => {
+    expect(formatAmount(1e-8)).toBe("0.00000001")
+    expect(formatAmount(1.2345e-8)).toBe("0.00000001235")
+    expect(formatAmount(1e-9)).toBe("0.000000001")
+    // toPrecision 恰在 1e-7 切换指数记法，边界两侧口径一致
+    expect(formatAmount(1e-7)).toBe("0.0000001")
+    expect(formatAmount(9.87e-8)).toBe("0.0000000987")
+    // 全部结果不得含指数记法
+    for (const v of [1e-7, 1e-8, 1.2345e-8, 1e-9]) {
+      expect(formatAmount(v)).not.toMatch(/e/i)
+    }
+  })
 })
 
 describe("formatPrice 自适应位数", () => {

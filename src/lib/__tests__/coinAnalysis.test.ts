@@ -59,6 +59,21 @@ describe("analyzeCoin", () => {
     expect(a!.indicators.find((i) => i.key === "volume")).toBeDefined()
   })
 
+  it("成交量尾部含 null：均量按有效值计算，null 不计入分母压低量比", () => {
+    const closes = ramp(365, 100, 1)
+    // 恒定 1000 量，尾部 10 天缺失（null）——旧口径把 null 当 0 计入分母，
+    // avg5 被压成 0、量比 0（误判缩量）；有效口径下量比应仍为 1
+    const volumes: (number | null)[] = [...ramp(355, 1000, 0), ...Array(10).fill(null)]
+    const a = analyzeCoin(closes, volumes)
+    const vol = a!.indicators.find((i) => i.key === "volume")
+    expect(vol).toBeDefined()
+    expect(vol!.display).toMatchObject({
+      key: "ind.volume.display.mildUp",
+      params: { ratio: "1.00" },
+    })
+    expect(vol!.score).toBe(1) // 上涨 + 量比持平 → 温和配合
+  })
+
   it("MA200 数据不足时记入缺失说明", () => {
     const a = analyzeCoin(ramp(80, 100, 1), null)
     expect(a).not.toBeNull()

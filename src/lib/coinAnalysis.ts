@@ -133,9 +133,12 @@ export function analyzeCoin(
   const hasVolume = validVols.length >= 25 && volumes != null && volumes.length === prices.length
   let volInd: IndicatorResult | null = null
   if (hasVolume) {
-    const vols = volumes as number[]
-    const avg5 = vols.slice(-5).reduce((a, b) => a + b, 0) / 5
-    const avg20 = vols.slice(-20).reduce((a, b) => a + b, 0) / 20
+    // 均量基于过滤后的有效序列（与准入校验同口径）：尾部缺失（null）不按 0
+    // 计入分母，否则均量被人为压低、量比失真
+    const tail5 = validVols.slice(-5)
+    const tail20 = validVols.slice(-20)
+    const avg5 = tail5.reduce((a, b) => a + b, 0) / tail5.length
+    const avg20 = tail20.reduce((a, b) => a + b, 0) / tail20.length
     const chg5 = ((price - prices[prices.length - 6]) / prices[prices.length - 6]) * 100
     const vp = scoreVolumePrice(chg5, avg20 > 0 ? avg5 / avg20 : 1)
     volInd = {

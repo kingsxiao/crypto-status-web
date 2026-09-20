@@ -22,22 +22,22 @@ export interface Candle {
 
 export interface Interval {
   key: string
-  label: string
   binance?: string
   okx?: string
   cgDays?: number
 }
 
+// 界面取词走 i18n 的 coin.interval.*，这里只保留数据映射，不再硬编码中文标签
 export const INTERVALS: Interval[] = [
-  { key: "1s", label: "1秒", binance: "1s", okx: "1s", cgDays: 1 },
-  { key: "1m", label: "1分", binance: "1m", okx: "1m", cgDays: 1 },
-  { key: "5m", label: "5分", binance: "5m", okx: "5m", cgDays: 1 },
-  { key: "15m", label: "15分", binance: "15m", okx: "15m", cgDays: 1 },
-  { key: "30m", label: "30分", binance: "30m", okx: "30m", cgDays: 1 },
-  { key: "1h", label: "1时", binance: "1h", okx: "1H", cgDays: 30 },
-  { key: "4h", label: "4时", binance: "4h", okx: "4H", cgDays: 30 },
-  { key: "1d", label: "日线", binance: "1d", okx: "1D", cgDays: 365 },
-  { key: "1w", label: "周线", binance: "1w", okx: "1W", cgDays: 365 },
+  { key: "1s", binance: "1s", okx: "1s", cgDays: 1 },
+  { key: "1m", binance: "1m", okx: "1m", cgDays: 1 },
+  { key: "5m", binance: "5m", okx: "5m", cgDays: 1 },
+  { key: "15m", binance: "15m", okx: "15m", cgDays: 1 },
+  { key: "30m", binance: "30m", okx: "30m", cgDays: 1 },
+  { key: "1h", binance: "1h", okx: "1H", cgDays: 30 },
+  { key: "4h", binance: "4h", okx: "4H", cgDays: 30 },
+  { key: "1d", binance: "1d", okx: "1D", cgDays: 365 },
+  { key: "1w", binance: "1w", okx: "1W", cgDays: 365 },
 ]
 
 /** K 线主源主机链：公共行情镜像优先，主站兜底 */
@@ -49,7 +49,25 @@ export interface CandleResult {
   renderMode: "candles" | "line"
 }
 
-export async function fetchCandles(
+/* 同参并发去重（复刻 cg.ts 的 once 模式）：图表加载与观点区日线在默认
+   1d 周期下参数完全一致，共享同一 in-flight Promise，不对同一 no-store
+   接口重复发请求。键必须含 coinId+symbols+intervalKey 全集，缺一会串数据 */
+const inflight = new Map<string, Promise<CandleResult>>()
+
+export function fetchCandles(
+  coinId: string,
+  symbols: { binance: string; okx: string },
+  intervalKey: string
+): Promise<CandleResult> {
+  const key = `${coinId}|${symbols.binance}|${symbols.okx}|${intervalKey}`
+  const existing = inflight.get(key)
+  if (existing) return existing
+  const p = fetchCandlesOnce(coinId, symbols, intervalKey).finally(() => inflight.delete(key))
+  inflight.set(key, p)
+  return p
+}
+
+async function fetchCandlesOnce(
   coinId: string,
   symbols: { binance: string; okx: string },
   intervalKey: string

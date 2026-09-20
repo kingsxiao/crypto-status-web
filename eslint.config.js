@@ -4,7 +4,8 @@ import reactRefresh from "eslint-plugin-react-refresh"
 import tseslint from "typescript-eslint"
 
 export default tseslint.config(
-  { ignores: ["dist", ".playwright-mcp", "coverage"] },
+  // .zcode/.v2c/.video_agent：本地工具草稿目录，非项目源码，lint 与 git 均应忽略
+  { ignores: ["dist", ".playwright-mcp", "coverage", ".zcode", ".v2c", ".video_agent"] },
   {
     files: ["**/*.{ts,tsx}"],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],

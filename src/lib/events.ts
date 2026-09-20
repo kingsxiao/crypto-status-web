@@ -9,7 +9,9 @@
  *   - 以太坊 Glamsterdam：ethereum.org/roadmap/glamsterdam（Q4 2026 目标，日期待定）
  *
  * 时刻一律存 ISO 8601 带显式时区偏移（含夏令时切换），跨时区换算交给 Date。
- * 过期维护：直接增删下方 MARKET_EVENTS 条目即可。
+ * 过期维护：直接增删下方 HARDCODED_MARKET_EVENTS 条目即可；周期系列
+ * （NFP/CPI/FOMC/ECB）会在模块加载时按年度节奏自动向前外推（见
+ * extrapolateRecurringEvents），手工补充的硬编码条目按 id 优先于外推。
  */
 
 export type EventCategory = "macro" | "crypto"
@@ -40,7 +42,8 @@ export interface MarketEvent {
 /** 瞬时事件（CPI/NFP 等数据发布）默认视为「进行中」的窗口：覆盖发布后的市场反应期 */
 export const LIVE_WINDOW_MS = 60 * 60_000
 
-export const MARKET_EVENTS: MarketEvent[] = [
+/** 人工核对的事件（2026-09 核对）；导出供测试与外推锚定使用，消费方用 MARKET_EVENTS */
+export const HARDCODED_MARKET_EVENTS: MarketEvent[] = [
   /* ------------------------------ 已结束（近期） ------------------------------ */
   {
     id: "nfp-2026-08",
@@ -299,6 +302,216 @@ export const MARKET_EVENTS: MarketEvent[] = [
     descEn: "Rates 14:15 CET, presser 14:45 CET",
     source: { label: "ECB", url: "https://www.ecb.europa.eu/press/calendars/mgcgc/html/index.en.html" },
   },
+]
+
+/* ------------------------------ 周期事件外推 ------------------------------ */
+
+/**
+ * 硬编码终点（2026-12）过后，周期事件按年度节奏自动向前外推，事件页不至于
+ * 停在「全部已结束」。外推日期是节奏近似 —— 与 Fed/ECB/BLS 实际日历可漂移
+ * 数周，因此生成条目一律带 approx: true（UI 呈现 ≈ 而非虚假精确时刻，
+ * buildIcs 自动降级为全天事项导出）。
+ *
+ * 节奏依据官方日历的典型模式（来源见文件头），并以 2026 硬编码数据自证：
+ *   - NFP：BLS 惯例每月第一个周五 08:30 ET —— 规则精确复现 2026 全部 5 个
+ *     硬编码日期（8/7、9/4、10/2、11/6、12/4）
+ *   - CPI：BLS 月度中旬发布（2026 硬编码落在 10–14 日），取 12 日近似
+ *   - FOMC：每年 8 次会议（1/3/4/6/7/9/10/12 月），决议在周三 14:00 ET、
+ *     14:30 发布会；3/6/9/12 月例会附 SEP 点阵图
+ *   - ECB：每年 8 次会议（同上月组），决议在周四 14:15 法兰克福、14:45 发布会
+ */
+
+/** UTC 日历：某年某月（0 起）第 n 个 weekday（0=周日…6=周六）是几号 */
+function nthWeekdayDay(year: number, month: number, weekday: number, n: number): number {
+  const firstDow = new Date(Date.UTC(year, month, 1)).getUTCDay()
+  return 1 + ((weekday - firstDow + 7) % 7) + (n - 1) * 7
+}
+
+/** UTC 日历：某年某月（0 起）最后一个 weekday 是几号 */
+function lastWeekdayDay(year: number, month: number, weekday: number): number {
+  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
+  const lastDow = new Date(Date.UTC(year, month, daysInMonth)).getUTCDay()
+  return daysInMonth - ((lastDow - weekday + 7) % 7)
+}
+
+/**
+ * 美东某日的 UTC 偏移。夏令时自 2007 年起规则稳定：3 月第二个周日 02:00 起、
+ * 11 月第一个周日 02:00 止。切换均发生在凌晨，本模块只生成日间墙钟时刻
+ * （≥08:30），按日期比较即为精确。
+ */
+function etOffset(year: number, month: number, day: number): "-04:00" | "-05:00" {
+  const inDst =
+    (month > 2 || (month === 2 && day >= nthWeekdayDay(year, 2, 0, 2))) &&
+    (month < 10 || (month === 10 && day < nthWeekdayDay(year, 10, 0, 1)))
+  return inDst ? "-04:00" : "-05:00"
+}
+
+/** 法兰克福某日的 UTC 偏移。欧盟夏令时：3 月最后一个周日 01:00 UTC 起、10 月最后一个周日止 */
+function frankfurtOffset(year: number, month: number, day: number): "+01:00" | "+02:00" {
+  const inDst =
+    (month > 2 || (month === 2 && day >= lastWeekdayDay(year, 2, 0))) &&
+    (month < 9 || (month === 9 && day < lastWeekdayDay(year, 9, 0)))
+  return inDst ? "+02:00" : "+01:00"
+}
+
+const pad2 = (n: number) => String(n).padStart(2, "0")
+
+/** UTC 时刻 → 源时区墙钟的显式偏移 ISO 串（end 复用；平移回墙钟后取 UTC 部件） */
+function toIsoWithOffset(ms: number, offset: string): string {
+  const sign = offset[0] === "-" ? -1 : 1
+  const shifted = ms + sign * (Number(offset.slice(1, 3)) * 60 + Number(offset.slice(4, 6))) * 60_000
+  const d = new Date(shifted)
+  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}T${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}:00${offset}`
+}
+
+/** 自然月加法（UTC 日历；月溢出由 Date.UTC 归一化） */
+function addMonthsUtc(ms: number, months: number): number {
+  const d = new Date(ms)
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + months, d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes())
+}
+
+/** 月内日期规则：第 nth 个星期几，或固定日期 */
+type DayRule = { weekday: number; nth: number } | { dayOfMonth: number }
+
+const EN_MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+]
+
+/** 周期系列的外推节奏（依据见本节开头说明） */
+interface SeriesSpec {
+  /** id 前缀（系列识别，对应硬编码 id 如 nfp-2026-08） */
+  prefix: string
+  /** 每年锚定月份（1–12）；缺省 = 每月 */
+  anchorMonths?: number[]
+  day: DayRule
+  /** 源时区墙钟时刻 */
+  wall: { h: number; m: number }
+  zone: "ET" | "Frankfurt"
+  /** 决议类持续分钟数（含发布会）；数据发布类不填 */
+  durationMin?: number
+  /** 标题（入参为发布月 1–12；NFP/CPI 惯例以数据月份 = 发布前一月命名） */
+  title: (releaseMonth: number) => { zh: string; en: string }
+  desc: { zh: string; en: string }
+  source: { label: string; url: string }
+}
+
+const SERIES_SPECS: SeriesSpec[] = [
+  {
+    prefix: "nfp",
+    day: { weekday: 5, nth: 1 },
+    wall: { h: 8, m: 30 },
+    zone: "ET",
+    title: (m) => {
+      const data = m === 1 ? 12 : m - 1
+      return { zh: `美国 ${data} 月非农就业报告（NFP）`, en: `US ${EN_MONTHS[data - 1]} Nonfarm Payrolls (NFP)` }
+    },
+    desc: { zh: "就业增减、失业率与时薪增速一并发布，利率预期即时重定价", en: "Job gains, unemployment rate and wage growth released at once" },
+    source: { label: "BLS", url: "https://www.bls.gov/schedule/news_release/empsit.htm" },
+  },
+  {
+    prefix: "cpi",
+    day: { dayOfMonth: 12 },
+    wall: { h: 8, m: 30 },
+    zone: "ET",
+    title: (m) => {
+      const data = m === 1 ? 12 : m - 1
+      return { zh: `美国 ${data} 月 CPI`, en: `US ${EN_MONTHS[data - 1]} CPI` }
+    },
+    desc: { zh: "整体与核心 CPI 同比/环比", en: "Headline and core CPI y/y and m/m" },
+    source: { label: "BLS", url: "https://www.bls.gov/schedule/news_release/cpi.htm" },
+  },
+  {
+    prefix: "fomc",
+    anchorMonths: [1, 3, 4, 6, 7, 9, 10, 12],
+    day: { weekday: 3, nth: 2 },
+    wall: { h: 14, m: 0 },
+    zone: "ET",
+    durationMin: 90,
+    title: (m) => {
+      const sep = m === 3 || m === 6 || m === 9 || m === 12
+      return { zh: `FOMC 利率决议${sep ? "（含 SEP 点阵图）" : ""}`, en: `FOMC Rate Decision${sep ? " (with SEP)" : ""}` }
+    },
+    desc: { zh: "美东 14:00 公布决议，14:30 鲍威尔发布会", en: "Decision 14:00 ET, presser 14:30 ET" },
+    source: { label: "Fed", url: "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm" },
+  },
+  {
+    prefix: "ecb",
+    anchorMonths: [1, 3, 4, 6, 7, 9, 10, 12],
+    day: { weekday: 4, nth: 2 },
+    wall: { h: 14, m: 15 },
+    zone: "Frankfurt",
+    durationMin: 90,
+    title: () => ({ zh: "欧央行利率决议", en: "ECB Rate Decision" }),
+    desc: { zh: "法兰克福时间 14:15 公布利率，14:45 行长发布会", en: "Rates 14:15 CET, presser 14:45 CET" },
+    source: { label: "ECB", url: "https://www.ecb.europa.eu/press/calendars/mgcgc/html/index.en.html" },
+  },
+]
+
+/** 按节奏生成某年某月（1 起）的一个条目（不做截止/去重判断） */
+function buildOccurrence(spec: SeriesSpec, year: number, month: number): MarketEvent {
+  const m0 = month - 1
+  const day = "weekday" in spec.day ? nthWeekdayDay(year, m0, spec.day.weekday, spec.day.nth) : spec.day.dayOfMonth
+  const offset = spec.zone === "ET" ? etOffset(year, m0, day) : frankfurtOffset(year, m0, day)
+  const start = `${year}-${pad2(month)}-${pad2(day)}T${pad2(spec.wall.h)}:${pad2(spec.wall.m)}:00${offset}`
+  const title = spec.title(month)
+  const e: MarketEvent = {
+    id: `${spec.prefix}-${year}-${pad2(month)}`,
+    zh: title.zh,
+    en: title.en,
+    category: "macro",
+    impact: "high",
+    start,
+    approx: true,
+    descZh: `${spec.desc.zh}（按周期节奏推算，以官方日历为准）`,
+    descEn: `${spec.desc.en} (projected from recurring cadence; see official calendar)`,
+    source: spec.source,
+  }
+  if (spec.durationMin) {
+    // 90 分钟的决议窗口不会跨夏令时切换（切换均在凌晨），沿用同一偏移
+    e.end = toIsoWithOffset(eventStartMs(e) + spec.durationMin * 60_000, offset)
+  }
+  return e
+}
+
+/**
+ * 从 lastKnown 中各周期系列（nfp/cpi/fomc/ecb）最后一个硬编码事件起，按年度
+ * 节奏向前外推，截止于全集最晚开始时刻之后 months 个自然月。纯函数、零依赖：
+ *   - id 沿用系列规则（如 nfp-2027-03），与 lastKnown 撞 id 时跳过 —— 未来
+ *     手工补充硬编码条目自动优先，历史与未来都不会出现重复条目；
+ *   - 生成条目一律 approx: true；系列在 lastKnown 中无硬编码锚点时跳过
+ *     （宁缺毋假）。
+ * 返回按开始时刻升序。
+ */
+export function extrapolateRecurringEvents(lastKnown: MarketEvent[], months = 18): MarketEvent[] {
+  if (months <= 0 || lastKnown.length === 0) return []
+  const knownIds = new Set(lastKnown.map((e) => e.id))
+  const horizon = addMonthsUtc(Math.max(...lastKnown.map(eventStartMs)), months)
+  const hz = new Date(horizon)
+  const horizonIdx = hz.getUTCFullYear() * 12 + hz.getUTCMonth() // 0 起月份序号
+  const out: MarketEvent[] = []
+  for (const spec of SERIES_SPECS) {
+    const series = lastKnown.filter((e) => e.id.startsWith(`${spec.prefix}-`))
+    if (series.length === 0) continue
+    // 锚点：该系列最后一个硬编码事件的年月（日间时刻的 UTC 年月与源时区一致）
+    const anchor = new Date(Math.max(...series.map(eventStartMs)))
+    const startIdx = anchor.getUTCFullYear() * 12 + anchor.getUTCMonth() + 1
+    for (let idx = startIdx; idx <= horizonIdx; idx++) {
+      const y = Math.floor(idx / 12)
+      const m = (idx % 12) + 1
+      if (spec.anchorMonths && !spec.anchorMonths.includes(m)) continue
+      const e = buildOccurrence(spec, y, m)
+      if (eventStartMs(e) >= horizon) continue // 截止月内日期可能已越界
+      if (!knownIds.has(e.id)) out.push(e)
+    }
+  }
+  return out.sort((a, b) => eventStartMs(a) - eventStartMs(b))
+}
+
+/** 事件全集 = 硬编码（人工核对）+ 周期外推（节奏近似）；消费方一律用本导出 */
+export const MARKET_EVENTS: MarketEvent[] = [
+  ...HARDCODED_MARKET_EVENTS,
+  ...extrapolateRecurringEvents(HARDCODED_MARKET_EVENTS),
 ]
 
 /** 事件开始时刻（ms）；同一事件反复解析开销可忽略 */

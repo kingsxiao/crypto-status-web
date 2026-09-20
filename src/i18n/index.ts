@@ -45,18 +45,31 @@ function detectLocale(): Locale {
   return "en"
 }
 
-let current: Locale | null = null
-const listeners = new Set<() => void>()
-
-function getSnapshot(): Locale {
-  if (current == null) {
-    const raw = storageGet(STORAGE_KEY)
-    const stored = raw === "zh" || raw === "en"
-    const v: Locale = stored ? raw : detectLocale()
-    if (!stored) storageSet(STORAGE_KEY, v) // 首访检测出的默认语言落盘
-    current = v
+/**
+ * 模块初始化（import 时执行一次）：确定初始 locale、首访落盘、同步 html[lang]。
+ * 这些副作用原先寄居在 getSnapshot 首次调用里，令「读快照」带写行为；
+ * useSyncExternalStore 的快照函数应保持纯读，故全部移到这里。
+ *
+ * document 写入必须带 typeof 守卫：fng.test / crossAsset.test 是 node 环境
+ * （无 DOM），经运行时 import 链（fng.ts、crossAsset/verdict.ts）到达本模块，
+ * 裸访问 document 会打红现有基线（storageGet/storageSet 已有同类守卫）。
+ */
+function initLocale(): Locale {
+  const raw = storageGet(STORAGE_KEY)
+  const stored = raw === "zh" || raw === "en"
+  const v: Locale = stored ? raw : detectLocale()
+  if (!stored) storageSet(STORAGE_KEY, v) // 首访检测出的默认语言落盘
+  if (typeof document !== "undefined") {
     document.documentElement.lang = v === "zh" ? "zh-CN" : "en"
   }
+  return v
+}
+
+let current: Locale = initLocale()
+const listeners = new Set<() => void>()
+
+/** 快照函数只读（current 已在模块初始化赋值），不再携带任何写副作用 */
+function getSnapshot(): Locale {
   return current
 }
 

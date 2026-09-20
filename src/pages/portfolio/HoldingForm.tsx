@@ -122,7 +122,7 @@ export function HoldingForm({
               inputMode="decimal"
               value={state.cost}
               onChange={(e) => onChange({ ...state, cost: e.target.value })}
-              placeholder="USD · 选填"
+              placeholder={t("pf.costPlaceholder")}
               className="h-11 font-mono text-lg font-semibold tabular"
             />
           </div>

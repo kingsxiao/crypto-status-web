@@ -122,6 +122,11 @@ export function MarketsPage() {
 
   const coins = useMemo(() => snapshot?.coins ?? [], [snapshot])
 
+  // 排序输入快照：仅捕获「切换排序列/方向那一刻」的 tickers 引用。
+  // 此后秒级推送只更新单元格显示（价格/24H 数字照常实时刷新），
+  // 不再驱动 rows 重排 —— 按涨跌幅排序时行序不会每秒颠簸跳动
+  const [sortTickers, setSortTickers] = useState(tickers)
+
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
     let list = coins
@@ -129,8 +134,8 @@ export function MarketsPage() {
     if (scope === "favorites") list = list.filter((c) => has(c.id))
     if (q) list = list.filter((c) => c.name.toLowerCase().includes(q) || c.symbol.toLowerCase().includes(q))
     const sorted = [...list].sort((a, b) => {
-      const va = coinValue(a, sortKey, tickers[a.id]?.price ?? null)
-      const vb = coinValue(b, sortKey, tickers[b.id]?.price ?? null)
+      const va = coinValue(a, sortKey, sortTickers[a.id]?.price ?? null)
+      const vb = coinValue(b, sortKey, sortTickers[b.id]?.price ?? null)
       // 缺失值不与真实 0 混排：无论升序降序恒排末尾
       if (va == null || vb == null) {
         if (va == null && vb == null) return 0
@@ -140,9 +145,11 @@ export function MarketsPage() {
       return sortDir === "asc" ? d : -d
     })
     return sorted
-  }, [coins, query, scope, sortKey, sortDir, tickers, has])
+  }, [coins, query, scope, sortKey, sortDir, sortTickers, has])
 
   const onSort = (k: SortKey) => {
+    // 排序输入定格在点击时的实时价快照，直到下一次切换排序条件
+    setSortTickers(tickers)
     if (k === sortKey) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"))
     } else {
@@ -236,13 +243,13 @@ export function MarketsPage() {
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-8">
+                  <TableHead className="w-6 pl-1.5 pr-0 sm:w-8 sm:pl-3 sm:pr-3">
                     <span className="sr-only">{t("common.col.favSr")}</span>
                   </TableHead>
-                  <SortHead label="#" sortKey="rank" active={sortKey === "rank"} dir={sortDir} onSort={onSort} className="w-14 text-center" />
+                  <SortHead label="#" sortKey="rank" active={sortKey === "rank"} dir={sortDir} onSort={onSort} className="hidden w-14 text-center sm:table-cell" />
                   <TableHead>{t("common.col.asset")}</TableHead>
                   <SortHead label={t("common.col.price")} sortKey="price" active={sortKey === "price"} dir={sortDir} onSort={onSort} className="text-right" />
-                  <SortHead label="1H" sortKey="chg1h" active={sortKey === "chg1h"} dir={sortDir} onSort={onSort} className="text-right" />
+                  <SortHead label="1H" sortKey="chg1h" active={sortKey === "chg1h"} dir={sortDir} onSort={onSort} className="hidden text-right sm:table-cell" />
                   <SortHead label="24H" sortKey="chg24h" active={sortKey === "chg24h"} dir={sortDir} onSort={onSort} className="text-right" />
                   <SortHead label="7D" sortKey="chg7d" active={sortKey === "chg7d"} dir={sortDir} onSort={onSort} className="text-right" />
                   <SortHead label="30D" sortKey="chg30d" active={sortKey === "chg30d"} dir={sortDir} onSort={onSort} className="hidden text-right sm:table-cell" />
@@ -284,10 +291,10 @@ export function MarketsPage() {
                         hasDetail && "hover:bg-secondary/60 focus-visible:bg-secondary/60 focus-visible:outline-none"
                       )}
                     >
-                      <TableCell>
+                      <TableCell className="pl-1.5 pr-0 sm:pl-3 sm:pr-3">
                         <WatchStar active={has(c.id)} onToggle={() => toggle(c.id)} />
                       </TableCell>
-                      <TableCell className="text-center font-mono text-xs text-muted-foreground">
+                      <TableCell className="hidden text-center font-mono text-xs text-muted-foreground sm:table-cell">
                         {c.market_cap_rank}
                       </TableCell>
                       <TableCell>
@@ -296,7 +303,7 @@ export function MarketsPage() {
                       <TableCell className="text-right">
                         {tk ? <LivePrice price={price} /> : <span className="font-mono font-semibold tabular">${formatPrice(price)}</span>}
                       </TableCell>
-                      <TableCell className="text-right text-xs">
+                      <TableCell className="hidden text-right text-xs sm:table-cell">
                         <Pct v={c.price_change_percentage_1h_in_currency} />
                       </TableCell>
                       <TableCell className="text-right">

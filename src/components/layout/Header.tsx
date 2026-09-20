@@ -24,9 +24,9 @@ function feedText(s: FeedStatus, hasError: boolean): { dot: string; text: string
   }
 }
 
-/** 下拉浮层的共用交互：外部点击 / Escape 关闭 */
-function useDismiss(open: boolean, onClose: () => void) {
-  const ref = useRef<HTMLDivElement>(null)
+/** 下拉浮层的共用交互：外部点击 / Escape 关闭（泛型 ref 适配 div / header 等容器） */
+function useDismiss<T extends HTMLElement>(open: boolean, onClose: () => void) {
+  const ref = useRef<T>(null)
   useEffect(() => {
     if (!open) return
     const onPointerDown = (e: PointerEvent) => {
@@ -50,7 +50,7 @@ function ThemePicker() {
   const { theme, setTheme } = useTheme()
   useT()
   const [open, setOpen] = useState(false)
-  const rootRef = useDismiss(open, () => setOpen(false))
+  const rootRef = useDismiss<HTMLDivElement>(open, () => setOpen(false))
 
   return (
     <div ref={rootRef} className="relative">
@@ -110,7 +110,7 @@ function ThemePicker() {
 function LanguagePicker() {
   const { locale } = useLocale()
   const [open, setOpen] = useState(false)
-  const rootRef = useDismiss(open, () => setOpen(false))
+  const rootRef = useDismiss<HTMLDivElement>(open, () => setOpen(false))
 
   return (
     <div ref={rootRef} className="relative">
@@ -166,16 +166,22 @@ export function Header() {
   const { locale } = useLocale()
   const { error, refreshing, lastUpdated, refresh, feedStatus } = useMarket()
   const [menuOpen, setMenuOpen] = useState(false)
+  // 汉堡菜单的关闭守卫挂在 header 上（同时覆盖触发按钮与下拉面板，
+  // 点按钮本身只走 toggle，不会被外部点击逻辑先关再开）
+  const headerRef = useDismiss<HTMLElement>(menuOpen, () => setMenuOpen(false))
   const feed = feedText(feedStatus, !!error)
   // 英文界面下主导航的 EN 小角标与译文重复，隐藏
   const showEnTag = locale === "zh"
-  // 九项导航：中文标签 1280(xl) 刚好放下；英文词长 2-3 倍，xl 会把右侧控件挤出
-  // 视口（实测 1536 仍溢出 37px），英文界面桌面导航升到 2xl，区间交给汉堡菜单
-  const navShow = locale === "en" ? "2xl:flex" : "xl:flex"
-  const burgerShow = locale === "en" ? "2xl:hidden" : "xl:hidden"
+  // 十项导航：中文标签均为 2 字，2xl(1536) 从容放下；英文词长 2-3 倍，
+  // 桌面导航自 1664px 起显示，xl/2xl 区间交给汉堡菜单（Escape 可关）
+  const navShow = locale === "en" ? "min-[1664px]:flex" : "2xl:flex"
+  const burgerShow = locale === "en" ? "min-[1664px]:hidden" : "2xl:hidden"
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-md">
+    <header
+      ref={headerRef}
+      className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-md"
+    >
       <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 2xl:max-w-[1680px] 2xl:px-10">
         <NavLink to="/" className="flex shrink-0 items-center gap-3 outline-none">
           <div className="flex size-8 items-center justify-center rounded-md border border-primary/70">
@@ -189,7 +195,7 @@ export function Header() {
           </div>
         </NavLink>
 
-        {/* 桌面端导航菜单：中文 xl 起、英文 2xl 起显示；放不下的区间交给汉堡菜单 */}
+        {/* 桌面端导航菜单：中文 2xl 起、英文 1664px 起显示；放不下的区间交给汉堡菜单 */}
         <nav className={cn("hidden items-center gap-0.5", navShow)} aria-label={t("hdr.nav")}>
           {NAV_ITEMS.map(({ to, key, icon: Icon }) => (
             <NavLink
@@ -200,7 +206,7 @@ export function Header() {
               onFocus={() => prefetchRoute(to)}
               className={({ isActive }) =>
                 cn(
-                  // px-2：九项导航在 1536(2xl) 英文界面也放得下（px-3 会溢出 37px）
+                  // px-2：十项导航在 1664px 英文界面也放得下（更宽的 px-3 会溢出）
                   "flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] transition-colors",
                   isActive
                     ? "bg-primary/10 text-primary"

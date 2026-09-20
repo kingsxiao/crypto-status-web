@@ -119,6 +119,7 @@ export function CoinPage() {
 
   return (
     <CoinDetail
+      key={coin.id} /* 路由换币强制重挂载：绝不复用上一币种的图表/偏好状态（双保险） */
       coin={coin}
       live={tickers[coin.id]}
       onBack={() => (window.history.length > 1 ? navigate(-1) : navigate("/markets"))}

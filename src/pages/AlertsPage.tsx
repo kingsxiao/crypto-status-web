@@ -47,6 +47,7 @@ import {
   type AlertKind,
 } from "@/lib/alerts"
 import { formatPrice, parseNum } from "@/lib/format"
+import { TRADE_SYMBOLS } from "@/lib/realtime"
 import { cn } from "@/lib/utils"
 
 function formatDateTime(ts: number): string {
@@ -100,8 +101,16 @@ export function AlertsPage() {
   const full = alerts.length >= MAX_ALERTS
 
   const priceOf = (id: string) => tickers[id]?.price ?? coins.find((c) => c.id === id)?.current_price ?? null
-  const curPrice = priceOf(coinId)
-  const selectedCoin = coins.find((c) => c.id === coinId)
+  // 可创建预警的币只列实时源（TRADE_SYMBOLS）覆盖的 —— 可选集与推送集一致，
+  // 新建规则才一定有价可判；深链 ?coin= 带入集合外的历史脏值（如 tether）
+  // 时渲染期回退首个可选币，受控 select 不得显示空白
+  const selectable = useMemo(() => coins.filter((c) => TRADE_SYMBOLS[c.id] != null), [coins])
+  const validCoinId =
+    selectable.length === 0 || selectable.some((c) => c.id === coinId)
+      ? coinId
+      : selectable[0].id
+  const curPrice = priceOf(validCoinId)
+  const selectedCoin = coins.find((c) => c.id === validCoinId)
 
   const perm = useMemo(() => {
     void permTick
@@ -114,8 +123,8 @@ export function AlertsPage() {
       setError(t("al.create.invalid"))
       return
     }
-    const sym = (selectedCoin?.symbol ?? coinId).toUpperCase()
-    const rule = add({ coinId, symbol: sym, kind, price: v })
+    const sym = (selectedCoin?.symbol ?? validCoinId).toUpperCase()
+    const rule = add({ coinId: validCoinId, symbol: sym, kind, price: v })
     if (!rule) {
       setError(t("al.create.full", { n: MAX_ALERTS }))
       return
@@ -245,7 +254,7 @@ export function AlertsPage() {
               <div className="relative">
                 <select
                   id="al-coin"
-                  value={coinId}
+                  value={validCoinId}
                   onChange={(e) => {
                     setCoinId(e.target.value)
                     setPrice("")
@@ -253,8 +262,8 @@ export function AlertsPage() {
                   }}
                   className="h-11 w-full appearance-none rounded-md border border-input bg-background px-3 pr-8 font-mono text-sm font-semibold uppercase outline-none transition-colors focus-visible:border-foreground/60 focus-visible:ring-2 focus-visible:ring-ring/30"
                 >
-                  {coins.length === 0 && <option value={coinId}>{coinId}</option>}
-                  {coins.map((c) => (
+                  {selectable.length === 0 && <option value={validCoinId}>{validCoinId}</option>}
+                  {selectable.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.symbol.toUpperCase()} · {c.name}
                     </option>

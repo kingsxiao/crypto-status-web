@@ -104,11 +104,13 @@ const BTC_PRICES_JSON = {
 /* -------------------------- alternative.me /fng -------------------------- */
 
 const FNG_JSON = {
-  data: walk(31, 52, 69, 6).map((v, i) => ({
-    // alternative.me 返回最新在前；走动序列末端 69 对应最新一天
+  // alternative.me 返回最新在前：data[0] = 今天（69 → Greed），data[30] = 30 天前。
+  // wobble 是乘法系数（0.05 = ±5%）：此前误传 6（±600%）会把指数推到
+  // 341/100 的越界值，情绪页标尺直接溢出
+  data: walk(31, 69, 52, 0.06).map((v, i) => ({
     value: String(Math.round(v)),
     value_classification: v > 60 ? "Greed" : v > 45 ? "Neutral" : "Fear",
-    timestamp: String(Math.round((NOW - (30 - i) * DAY) / 1000)),
+    timestamp: String(Math.round((NOW - i * DAY) / 1000)),
   })),
 }
 
@@ -136,6 +138,28 @@ function binanceKlines(url: URL): (string | number)[][] {
   })
 }
 
+/* -------- 跨资产判断页三源（Defillama / Binance fapi / CG top50 广度） -------- */
+
+/** Defillama 稳定币全史（60 点，fetch 侧要求 ≥9 点且 ago(30) 可回看） */
+const STABLECOIN_JSON = walk(60, 1.18e11, 1.32e11).map((v, i) => ({
+  date: Math.round((NOW - (59 - i) * DAY) / 1000),
+  totalCirculatingUSD: { peggedUSD: Math.round(v) },
+}))
+
+/** 资金费率（8h）：0.012% 的中性偏多水平 */
+const FUNDING_JSON = { lastFundingRate: "0.00012" }
+
+/** 多空账户比 8 日序列：1.2 → 1.6 缓步转多 */
+const LS_RATIO_JSON = walk(8, 1.2, 1.6).map((v) => ({ longShortRatio: v.toFixed(3) }))
+
+/** CG top50 广度行：fetch 侧要求 ≥20 行有效（market_cap + 7d 涨跌），
+ *  sin 摆动给出确定性的涨跌混合（不与快照 COINS_JSON 共用 —— 那份只有 12 行） */
+const BREADTH_JSON = Array.from({ length: 50 }, (_, i) => ({
+  id: `mock-rank-${i + 1}`,
+  market_cap: Math.round(5e11 / (i + 1)),
+  price_change_percentage_7d_in_currency: Number((Math.sin(i / 4) * 8).toFixed(2)),
+}))
+
 /* --------------------------------- 挂载 --------------------------------- */
 
 function json(body: unknown) {
@@ -144,11 +168,22 @@ function json(body: unknown) {
 }
 
 export async function installApiMocks(page: Page): Promise<void> {
-  await page.route("**/api/v3/coins/markets*", json(COINS_JSON))
+  await page.route("**/api/v3/coins/markets*", (route) => {
+    // 跨资产广度请求带 per_page=50（需 ≥20 行有效），与快照的 ids= 请求分流
+    const perPage = new URL(route.request().url()).searchParams.get("per_page")
+    return (perPage === "50" ? json(BREADTH_JSON) : json(COINS_JSON))(route)
+  })
   await page.route("**/api/v3/global*", json(GLOBAL_JSON))
   await page.route("**/api/v3/coins/*/market_chart*", json(BTC_PRICES_JSON))
   await page.route("**/api/v3/klines*", (route) =>
     json(binanceKlines(new URL(route.request().url())))(route)
   )
-  await page.route("**/alternative.me/fng*", json(FNG_JSON))
+  // 注意 fng 路由必须写全 origin 且以 /** 结尾：实际 URL 是 /fng/（带尾斜杠
+  // + query），Playwright glob 里段内 **/单 * 都不跨 /，简写 fng* 会静默放行
+  // 真实请求（情绪页断言因此在真实 API 上摇摆，实测验证仅此 pattern 拦得住）
+  await page.route("https://api.alternative.me/fng/**", json(FNG_JSON))
+  // 跨资产判断页三源（fapi 与 Binance 现货一样有云 IP 地域封锁，必须 mock）
+  await page.route("**/stablecoins.llama.fi/stablecoincharts/all*", json(STABLECOIN_JSON))
+  await page.route("**/fapi/v1/premiumIndex*", json(FUNDING_JSON))
+  await page.route("**/futures/data/globalLongShortAccountRatio*", json(LS_RATIO_JSON))
 }

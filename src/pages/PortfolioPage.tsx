@@ -115,6 +115,9 @@ export function PortfolioPage() {
       }))
   }, [rows])
 
+  /** 环图分段：从 alloc 派生的稳定引用，秒级行情推送不触发 memo 化 AllocDonut 重算 */
+  const slices = useMemo(() => alloc.map((a) => ({ key: a.key, pct: a.pct, color: a.color })), [alloc])
+
   const top = alloc[0]
 
   const openAdd = (coinId?: string) =>
@@ -446,7 +449,7 @@ export function PortfolioPage() {
                 ) : (
                   <>
                     <div className="relative mx-auto w-fit">
-                      <AllocDonut slices={alloc.map((a) => ({ key: a.key, pct: a.pct, color: a.color }))} />
+                      <AllocDonut slices={slices} />
                       <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
                         <span className="font-mono text-[9px] tracking-[0.18em] text-muted-foreground uppercase">
                           {t("pf.kpi.total")}

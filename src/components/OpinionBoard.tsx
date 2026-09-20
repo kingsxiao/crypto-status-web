@@ -3,6 +3,8 @@
  * 供币种详情页（coinAnalysis 八指标）与情绪页（多维聚合）共用。
  */
 
+import { memo } from "react"
+
 import { DivergingBar } from "@/components/Gauge"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHead, CardHeader } from "@/components/ui/card"
@@ -140,8 +142,8 @@ export function OpinionSummary({
   )
 }
 
-/** 完整观点看板卡片 */
-export function OpinionBoard({
+/** 完整观点看板卡片（memo：analysis 引用随 5s 采样保持稳定，K线页每秒 live 推送不再全子树重渲染） */
+export const OpinionBoard = memo(function OpinionBoard({
   analysis,
   title,
   description,
@@ -186,4 +188,4 @@ export function OpinionBoard({
       </CardContent>
     </Card>
   )
-}
+})

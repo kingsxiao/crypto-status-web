@@ -30,6 +30,7 @@ const PortfolioPage = lazy(() => import("@/pages/PortfolioPage").then((m) => ({ 
 const AlertsPage = lazy(() => import("@/pages/AlertsPage").then((m) => ({ default: m.AlertsPage })))
 const EventsPage = lazy(() => import("@/pages/EventsPage").then((m) => ({ default: m.EventsPage })))
 const AboutPage = lazy(() => import("@/pages/AboutPage").then((m) => ({ default: m.AboutPage })))
+const SettingsPage = lazy(() => import("@/pages/SettingsPage").then((m) => ({ default: m.SettingsPage })))
 
 /** 路由切换后回到页面顶部；首屏渲染完成后空闲预取常用路由 chunk */
 function ScrollToTop() {
@@ -101,6 +102,7 @@ export default function App() {
               <Route path="/alerts" element={<AlertsPage />} />
               <Route path="/events" element={<EventsPage />} />
               <Route path="/about" element={<AboutPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>

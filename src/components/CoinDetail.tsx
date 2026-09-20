@@ -143,8 +143,13 @@ export function CoinDetail({ coin, live, onBack }: Props) {
   const [error, setError] = useState<string | null>(null)
   // 同币切周期：保留旧图加遮罩，而不是闪整块骨架屏
   const [reloading, setReloading] = useState(false)
+  // 当前 candles 实际对应的周期（与 candles 同批落定）：同币切周期期间旧图保留
+  // 展示，但观点区日线只在数据确实是 1d 时才跟随图表，防止过渡窗口串周期
+  const [candlesItv, setCandlesItv] = useState<string | null>(null)
 
-  // 独立日线序列：多空观点分析固定基于日线，不随图表周期切换
+  // 独立日线序列：多空观点分析固定基于日线，不随图表周期切换。
+  // 图表周期即 1d 时直接复用图表数据（默认周期挂载零额外请求）；切到非 1d
+  // 周期后图表数据已非日线，才按需独立拉取一次并缓存，切回 1d 恢复跟随
   const [dailyCandles, setDailyCandles] = useState<Candle[] | null>(null)
   const [dailyLoading, setDailyLoading] = useState(true)
 
@@ -161,7 +166,13 @@ export function CoinDetail({ coin, live, onBack }: Props) {
   const load = useCallback(
     async (silent = false) => {
       if (!symbols) {
-        // 直链进入无交易对的币种（如稳定币）：给出明确提示而非永久骨架屏
+        // 直链进入无交易对的币种（如稳定币）：先清掉可能残留的上一币种图表
+        // （hash 切币不重挂载时的双保险），再给出明确提示而非永久骨架屏
+        coinKeyRef.current = ""
+        hasDataRef.current = false
+        setCandles(null)
+        setCandlesItv(null)
+        setReloading(false)
         setError(t("coin.noChart"))
         return
       }
@@ -172,6 +183,7 @@ export function CoinDetail({ coin, live, onBack }: Props) {
         if (coinChanged || !hasDataRef.current) {
           hasDataRef.current = false
           setCandles(null)
+          setCandlesItv(null)
           setReloading(false)
         } else {
           setReloading(true)
@@ -182,6 +194,7 @@ export function CoinDetail({ coin, live, onBack }: Props) {
         if (gen !== genRef.current) return
         setCandles(res.candles)
         hasDataRef.current = true
+        setCandlesItv(intervalKey)
         setSourceMode(res.renderMode)
         setSource(res.source === "coingecko-line" ? t("coin.source.snapshot") : t("coin.source.live"))
         setError(null)
@@ -210,7 +223,7 @@ export function CoinDetail({ coin, live, onBack }: Props) {
     return () => clearInterval(timer)
   }, [load, intervalKey])
 
-  // 独立加载日线（仅币种切换时重拉；静默失败不影响图表）
+  // 独立拉取日线（静默失败不影响图表，观点区显示数据不足提示）
   const dailyGenRef = useRef(0)
   const loadDaily = useCallback(async () => {
     if (!symbols) {
@@ -230,11 +243,23 @@ export function CoinDetail({ coin, live, onBack }: Props) {
     }
   }, [coin.id, symbols])
 
+  // 币种切换：丢弃旧币日线缓存（配合 CoinPage 的 key 重挂载双保险）
   useEffect(() => {
     setDailyCandles(null)
     setDailyLoading(true)
+  }, [coin.id, symbols])
+
+  // 日线拉取时机：仅在图表周期不是 1d（日线无法跟随图表）且无缓存时触发；
+  // 图表 1d 加载彻底失败时兜底独立拉一次，保住观点区不空转
+  useEffect(() => {
+    if (!symbols) {
+      setDailyLoading(false) // 无交易对：观点区直接走「数据不足」态
+      return
+    }
+    if (dailyCandles) return // 已有缓存：周期来回切换不重复拉
+    if (intervalKey === "1d" && !error) return // 跟随图表，等图表数据落地
     loadDaily()
-  }, [loadDaily])
+  }, [symbols, dailyCandles, intervalKey, error, loadDaily])
 
   const livePrice = live?.price ?? coin.current_price
   const liveChange = live?.changePct ?? coin.price_change_percentage_24h_in_currency ?? 0
@@ -320,15 +345,18 @@ export function CoinDetail({ coin, live, onBack }: Props) {
     [merged, range]
   )
 
-  // 多空观点：日线 + 实时价末位合并 → 八指标综合判断
+  // 多空观点：日线 + 实时价末位合并 → 八指标综合判断。
+  // 日线来源：图表当前数据就是日线时跟随图表（零额外请求），否则用独立缓存；
+  // 切周期过渡窗口旧图的周期标记仍准确，不会把非日线数据当日线算指标
+  const dailySource = candlesItv === "1d" ? candles : dailyCandles
   const opinion = useMemo(() => {
-    if (!dailyCandles?.length) return null
-    const mergedDaily = mergeLiveTick(dailyCandles, liveSampled ? { price: liveSampled.price } : undefined)
+    if (!dailySource?.length) return null
+    const mergedDaily = mergeLiveTick(dailySource, liveSampled ? { price: liveSampled.price } : undefined)
     return analyzeCoin(
       mergedDaily.map((c) => c.close),
       mergedDaily.map((c) => c.volume)
     )
-  }, [dailyCandles, liveSampled])
+  }, [dailySource, liveSampled])
 
   // 渲染模式：兜底折线源强制折线；蜡烛源下用户手动选择优先，否则跟随源
   const renderMode = sourceMode === "line" ? "line" : (renderPref ?? "candles")

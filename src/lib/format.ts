@@ -22,12 +22,23 @@ export function parseNum(s: string): number {
   return parseFloat(s.trim().replace(",", "."))
 }
 
-/** 数量格式化（持仓/换算器共用）：非有限值 →「—」，大数千分位，小数最多 8 位有效 */
+/**
+ * 数量格式化（持仓/换算器共用）：非有限值 →「—」，大数千分位，小数最多 4 位有效。
+ * 极小数量（< 1e-6 量级）toPrecision 会输出科学计数法（1e-8 → "1.000e-8"），
+ * 这里按指数把尾数展开为定点小数再剪尾零 —— 1e-8 → "0.00000001"，
+ * 且 1e-9 这类更深量级不会被固定位数截断成 "0"。
+ */
 export function formatAmount(v: number): string {
   if (!Number.isFinite(v)) return "—"
   if (v === 0) return "0"
   if (v >= 1) return v.toLocaleString("en-US", { maximumFractionDigits: 8 })
-  return v.toPrecision(4).replace(/\.?0+$/, "")
+  const s = Math.abs(v).toPrecision(4)
+  if (!s.includes("e")) return (v < 0 ? "-" : "") + s.replace(/\.?0+$/, "")
+  // 科学计数法：小数点左移 -exp 位（exp ≤ -7），手写移位避免 toFixed 的 100 位上限
+  const [mant, expStr] = s.split("e")
+  const digits = mant.replace(".", "")
+  const fixed = `0.${"0".repeat(-parseInt(expStr, 10) - 1)}${digits}`
+  return (v < 0 ? "-" : "") + fixed.replace(/\.?0+$/, "")
 }
 
 export function formatPct(v: number | null | undefined, digits = 2): string {

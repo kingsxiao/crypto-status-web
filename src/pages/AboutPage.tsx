@@ -1,9 +1,13 @@
 import {
   ArrowUpDown,
+  BellRing,
+  CalendarClock,
   CandlestickChart,
   Repeat,
+  Scale,
   Sigma,
   Star,
+  Wallet,
   Zap,
   type LucideIcon,
 } from "lucide-react"
@@ -22,6 +26,24 @@ const FEATURES: [MessageKey, MessageKey, LucideIcon][] = [
   ["about.f4.title", "about.f4.desc", ArrowUpDown],
   ["about.f5.title", "about.f5.desc", Star],
   ["about.f6.title", "about.f6.desc", Repeat],
+  ["about.f7.title", "about.f7.desc", Wallet],
+  ["about.f8.title", "about.f8.desc", BellRing],
+  ["about.f9.title", "about.f9.desc", CalendarClock],
+  ["about.f10.title", "about.f10.desc", Scale],
+]
+
+/** 页面清单：名称取词典 key，括注一句定位（desc 值自带顿号/逗号与句读） */
+const PAGES: [MessageKey, MessageKey][] = [
+  ["nav.dashboard", "about.pg.dash"],
+  ["nav.markets", "about.pg.markets"],
+  ["about.pg.coinName", "about.pg.coin"],
+  ["nav.sentiment", "about.pg.sentiment"],
+  ["nav.verdict", "about.pg.verdict"],
+  ["nav.converter", "about.pg.converter"],
+  ["nav.portfolio", "about.pg.portfolio"],
+  ["nav.alerts", "about.pg.alerts"],
+  ["nav.events", "about.pg.events"],
+  ["nav.about", "about.pg.about"],
 ]
 
 const STACK = ["React 19", "TypeScript", "Vite 7", "Tailwind CSS 4", "React Router 7", "Radix UI", "原生 SVG 图表"]
@@ -48,14 +70,12 @@ export function AboutPage() {
           <p>{t("about.what.p1")}</p>
           <p>
             {t("about.what.p2a")}
-            <b className="text-foreground">{t("nav.dashboard")}</b>
-            {t("about.what.p2b1")}
-            <b className="text-foreground">{t("nav.markets")}</b>
-            {t("about.what.p2b2")}
-            <b className="text-foreground">{t("nav.sentiment")}</b>
-            {t("about.what.p2b3")}
-            <b className="text-foreground">{t("nav.converter")}</b>
-            {t("about.what.p2b4")}
+            {PAGES.map(([key, desc]) => (
+              <span key={key}>
+                <b className="text-foreground">{t(key)}</b>
+                {t(desc)}
+              </span>
+            ))}
           </p>
         </CardContent>
       </Card>

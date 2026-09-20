@@ -3,7 +3,8 @@ import { expect, test } from "@playwright/test"
 import { installApiMocks } from "./mocks"
 
 /**
- * 全站冒烟：首页出价 → 行情表 → 币种K线 → 换算器 → 创建预警。
+ * 全站冒烟（9/10 页面）：首页出价 → 行情表 → 币种K线 → 换算器 → 创建预警
+ * + 情绪 / 跨资产判断 / 持仓 / 事件日历四页结构冒烟（About 为纯静态页不设用例）。
  * 只断言「数据到位后的稳定结构」，不断言具体行情数值。
  * 注意：本项目用 HashRouter，路由一律带 #/。
  *
@@ -21,8 +22,9 @@ test.describe("crypto-status-web 冒烟", () => {
     await page.goto("/#/")
     // 实时/快照价格任一到位即算通过（Binance WS 或 CG 快照兜底）
     await expect(page.locator("main")).toContainText(/\$\d/, { timeout: 45_000 })
-    // 顶部导航可跳转行情页
-    await page.click('a[href="#/markets"]')
+    // 顶部导航可跳转行情页。桌面导航与移动菜单各渲染一份链接（按断点
+    // 只有一份可见），须点可见的那份 —— 盲点第一个会命中隐藏元素超时
+    await page.click('a[href="#/markets"]:visible')
     await expect(page).toHaveURL(/#\/markets/)
   })
 
@@ -65,5 +67,38 @@ test.describe("crypto-status-web 冒烟", () => {
     await page.click('button:has-text("创建预警")')
     // 进行中表格出现 BTC 行
     await expect(page.locator("table tbody tr").filter({ hasText: "BTC" }).first()).toBeVisible()
+  })
+
+  test("情绪页：恐惧贪婪指数与分类渲染", async ({ page }) => {
+    await page.goto("/#/sentiment")
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("市场情绪")
+    // fng fixture 到位后渲染指数读数（data[0] = 今天 = 69）与分类文案
+    await expect(page.locator("main span.text-7xl")).toHaveText("69", { timeout: 45_000 })
+    await expect(page.locator("main")).toContainText("贪婪")
+  })
+
+  test("跨资产判断：三源数据到位后渲染判断卡与口径说明", async ({ page }) => {
+    await page.goto("/#/verdict")
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("跨资产判断")
+    // 数据源口径说明只在 verdict 计算完成（快照 + 三源跨资产 settle）后渲染，
+    // 而非停留在「跨资产数据加载中」过渡态或缺失源提示
+    await expect(page.locator("main")).toContainText("数据源：CoinGecko", { timeout: 45_000 })
+  })
+
+  test("持仓页：空状态引导渲染", async ({ page }) => {
+    await page.goto("/#/portfolio")
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("持仓组合")
+    // 全新上下文（localStorage 干净）渲染空状态 CTA
+    await expect(page.getByRole("button", { name: "添加第一笔持仓" })).toBeVisible({ timeout: 45_000 })
+  })
+
+  test("事件页：市场事件时间线渲染", async ({ page }) => {
+    await page.goto("/#/events")
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("市场事件日历")
+    await expect(page.locator("main")).toContainText("事件时间线")
+    // 不断言精确条数（事件清单会持续增补）：至少渲染一行事件
+    const rows = page.locator("main ul ul > li")
+    await expect(rows.first()).toBeVisible({ timeout: 45_000 })
+    expect(await rows.count()).toBeGreaterThanOrEqual(1)
   })
 })
