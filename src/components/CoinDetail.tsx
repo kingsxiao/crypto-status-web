@@ -5,6 +5,7 @@ import {
   ArrowUpRight,
   CandlestickChart,
   Check,
+  Keyboard,
   LineChart,
   Link2,
   Loader2,
@@ -15,6 +16,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { ChartSkeleton, SkHeader } from "@/components/loading"
+import { Kbd } from "@/components/ui/kbd"
 import { Segmented } from "@/components/ui/segmented"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -22,6 +24,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { CandleChart } from "@/components/CandleChart"
 import { OpinionBoard } from "@/components/OpinionBoard"
 import { useFavorites } from "@/hooks/useFavorites"
+import { isTypingTarget } from "@/hooks/useHotkey"
+import { useReveal } from "@/hooks/useReveal"
 import { t, useT } from "@/i18n"
 import type { Coin } from "@/lib/api"
 import { analyzeCoin } from "@/lib/coinAnalysis"
@@ -94,7 +98,8 @@ function Toggle({
   active: boolean
   onClick: () => void
   children: React.ReactNode
-  hint: string
+  /** 提示内容：文案 key 之外可附带键帽（Kbd）展示对应快捷键 */
+  hint: React.ReactNode
   disabled?: boolean
 }) {
   return (
@@ -120,6 +125,16 @@ function Toggle({
   )
 }
 
+/** 快捷键提示：既有 hint 文案 + 等宽键帽（纯键位符号，非文案） */
+function hintWithKey(hint: string, key: string): React.ReactNode {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {hint}
+      <Kbd>{key}</Kbd>
+    </span>
+  )
+}
+
 /** 头部小图标操作（自选 / 复制链接）共用样式 */
 const iconBtnCls =
   "inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-ring focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:ring-[3px]"
@@ -136,6 +151,29 @@ export function CoinDetail({ coin, live, onBack }: Props) {
   useEffect(() => {
     storageSet(PREFS_KEY, JSON.stringify({ intervalKey, range, overlays, panes, renderPref }))
   }, [intervalKey, range, overlays, panes, renderPref])
+
+  // 工具栏快捷键：数字 1-9 对应九档周期（INTERVAL_KEYS 恰九项）、M/B/F 切
+  // MA/BOLL/FIB 叠加、R/K 切 RSI/KDJ 副图。输入态豁免复用基础层
+  // isTypingTarget，Ctrl/Meta/Alt 组合键交还浏览器，不在此重复实现判定
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      if (isTypingTarget(e)) return
+      const k = e.key.toLowerCase()
+      if (k >= "1" && k <= "9") {
+        const itv = INTERVAL_KEYS[Number(k) - 1]
+        if (itv) setIntervalKey(itv)
+        return
+      }
+      if (k === "m") setOverlays((o) => ({ ...o, ma: !o.ma }))
+      else if (k === "b") setOverlays((o) => ({ ...o, boll: !o.boll }))
+      else if (k === "f") setOverlays((o) => ({ ...o, fib: !o.fib }))
+      else if (k === "r") setPanes((p) => ({ ...p, rsi: !p.rsi }))
+      else if (k === "k") setPanes((p) => ({ ...p, kdj: !p.kdj }))
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [])
 
   const [candles, setCandles] = useState<Candle[] | null>(null)
   const [sourceMode, setSourceMode] = useState<"candles" | "line">("candles")
@@ -361,9 +399,12 @@ export function CoinDetail({ coin, live, onBack }: Props) {
   // 渲染模式：兜底折线源强制折线；蜡烛源下用户手动选择优先，否则跟随源
   const renderMode = sourceMode === "line" ? "line" : (renderPref ?? "candles")
 
+  // 滚动显现：观点区在首屏之下，进入视口时显现（渐进增强，测试/无 JS 环境直接可见）
+  const revealRef = useReveal<HTMLElement>()
+
   return (
     <TooltipProvider delayDuration={200}>
-    <main className="mx-auto w-full max-w-7xl flex-1 2xl:max-w-[1680px] 2xl:px-10 space-y-4 px-4 pb-20 pt-6 sm:px-6">
+    <main ref={revealRef} className="mx-auto w-full max-w-7xl flex-1 2xl:max-w-[1680px] 2xl:px-10 space-y-4 px-4 pb-20 pt-6 sm:px-6">
       <div className="flex items-center justify-between">
         <Button variant="ghost" size="sm" onClick={onBack} className="-ml-2 gap-1.5">
           <ArrowLeft className="size-4" />
@@ -377,9 +418,9 @@ export function CoinDetail({ coin, live, onBack }: Props) {
         )}
       </div>
 
-      {/* 币种头部 */}
-      <Card className="fade-up">
-        <CardContent className="flex flex-wrap items-center justify-between gap-6 py-5">
+      {/* 币种头部（整页入场由 route-fade 承担；卡内两块内容走 .stagger 阶差） */}
+      <Card>
+        <CardContent className="stagger flex flex-wrap items-center justify-between gap-6 py-5">
           <div className="flex items-center gap-4">
             <img
               src={coin.image}
@@ -450,7 +491,7 @@ export function CoinDetail({ coin, live, onBack }: Props) {
                   role="img"
                   aria-label={`${t("coin.range24Label")} ${(pos24 * 100).toFixed(0)}%`}
                 >
-                  <span className="shrink-0 font-mono text-[10px] tabular text-down/90">{formatPrice(low24!)}</span>
+                  <span className="shrink-0 font-mono text-[11px] tabular text-down/90">{formatPrice(low24!)}</span>
                   <div className="relative h-1.5 flex-1 rounded-full bg-secondary">
                     <div
                       className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-500"
@@ -461,7 +502,7 @@ export function CoinDetail({ coin, live, onBack }: Props) {
                       style={{ left: `${pos24 * 100}%`, backgroundColor: liveChange >= 0 ? "var(--up)" : "var(--down)" }}
                     />
                   </div>
-                  <span className="shrink-0 font-mono text-[10px] tabular text-up/90">{formatPrice(high24!)}</span>
+                  <span className="shrink-0 font-mono text-[11px] tabular text-up/90">{formatPrice(high24!)}</span>
                 </div>
               )}
             </div>
@@ -475,7 +516,7 @@ export function CoinDetail({ coin, live, onBack }: Props) {
               { label: t("coin.stat.mcap"), value: coin.market_cap, compact: true },
             ].map((s) => (
               <div key={s.label} className="flex flex-col gap-1 sm:px-5 sm:first:pl-0 sm:last:pr-0">
-                <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{s.label}</span>
+                <span className="type-label text-muted-foreground">{s.label}</span>
                 <span className="font-mono text-sm font-semibold tabular">
                   {s.compact ? formatUsdCompact(s.value) : s.value ? `$${formatPrice(s.value)}` : "—"}
                 </span>
@@ -485,13 +526,15 @@ export function CoinDetail({ coin, live, onBack }: Props) {
         </CardContent>
       </Card>
 
-      {/* 工具栏 */}
-      <Card className="fade-up py-4">
-        <CardContent className="flex flex-wrap items-center gap-x-5 gap-y-3 px-5">
+      {/* 工具栏（快捷键：1-9 周期 / M B F 叠加 / R K 副图，图例见右侧键盘按钮）。
+          三组控件之间以 hairline Separator 分隔；窄屏允许各自换行（gap-6 组间距） */}
+      <Card className="py-4">
+        <CardContent className="stagger flex flex-wrap items-center gap-x-6 gap-y-3 px-5">
           <Segmented
             label={t("coin.intervalLabel")}
             value={intervalKey}
             onChange={setIntervalKey}
+            className="max-w-full flex-wrap"
             items={INTERVAL_KEYS.map((k) => ({
               value: k,
               label: <span className="font-mono">{t(`coin.interval.${k}`)}</span>,
@@ -513,13 +556,13 @@ export function CoinDetail({ coin, live, onBack }: Props) {
 
           <div className="flex items-center gap-1.5">
             <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">{t("coin.overlayLabel")}</span>
-            <Toggle active={overlays.ma} onClick={() => setOverlays((o) => ({ ...o, ma: !o.ma }))} hint={t("coin.overlay.maHint")}>
+            <Toggle active={overlays.ma} onClick={() => setOverlays((o) => ({ ...o, ma: !o.ma }))} hint={hintWithKey(t("coin.overlay.maHint"), "M")}>
               MA
             </Toggle>
-            <Toggle active={overlays.boll} onClick={() => setOverlays((o) => ({ ...o, boll: !o.boll }))} hint={t("coin.overlay.bollHint")}>
+            <Toggle active={overlays.boll} onClick={() => setOverlays((o) => ({ ...o, boll: !o.boll }))} hint={hintWithKey(t("coin.overlay.bollHint"), "B")}>
               BOLL
             </Toggle>
-            <Toggle active={overlays.fib} onClick={() => setOverlays((o) => ({ ...o, fib: !o.fib }))} hint={t("coin.overlay.fibHint")}>
+            <Toggle active={overlays.fib} onClick={() => setOverlays((o) => ({ ...o, fib: !o.fib }))} hint={hintWithKey(t("coin.overlay.fibHint"), "F")}>
               FIB
             </Toggle>
           </div>
@@ -528,18 +571,47 @@ export function CoinDetail({ coin, live, onBack }: Props) {
 
           <div className="flex items-center gap-1.5">
             <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">{t("coin.paneLabel")}</span>
-            <Toggle active={panes.rsi} onClick={() => setPanes((p) => ({ ...p, rsi: !p.rsi }))} hint={t("coin.pane.rsiHint")}>
+            <Toggle active={panes.rsi} onClick={() => setPanes((p) => ({ ...p, rsi: !p.rsi }))} hint={hintWithKey(t("coin.pane.rsiHint"), "R")}>
               RSI
             </Toggle>
             <Toggle active={panes.macd} onClick={() => setPanes((p) => ({ ...p, macd: !p.macd }))} hint={t("coin.pane.macdHint")}>
               MACD
             </Toggle>
-            <Toggle active={panes.kdj} onClick={() => setPanes((p) => ({ ...p, kdj: !p.kdj }))} hint={t("coin.pane.kdjHint")}>
+            <Toggle active={panes.kdj} onClick={() => setPanes((p) => ({ ...p, kdj: !p.kdj }))} hint={hintWithKey(t("coin.pane.kdjHint"), "K")}>
               KDJ
             </Toggle>
           </div>
 
-          <div className="ml-auto flex items-center gap-1.5" role="group" aria-label={t("coin.renderLabel")}>
+          <div className="ml-auto flex items-center gap-2" role="group" aria-label={t("coin.renderLabel")}>
+            {/* 快捷键图例：键位符号 + 既有分区标签（周期/叠加/副图），不新增文案 */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button aria-label={t("coin.shortcuts")} className={cn(iconBtnCls, "!size-7")}>
+                  <Keyboard aria-hidden className="size-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <div className="space-y-1.5">
+                  <p className="type-label text-muted-foreground">{t("coin.shortcuts")}</p>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <Kbd>1</Kbd>–<Kbd>9</Kbd>
+                    <span className="ml-1">{t("coin.intervalLabel")}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <Kbd>M</Kbd>
+                    <Kbd>B</Kbd>
+                    <Kbd>F</Kbd>
+                    <span className="ml-1">{t("coin.overlayLabel")}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <Kbd>R</Kbd>
+                    <Kbd>K</Kbd>
+                    <span className="ml-1">{t("coin.paneLabel")}</span>
+                  </div>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+            <Separator orientation="vertical" className="!h-5" />
             <Toggle
               active={renderMode === "candles"}
               onClick={() => setRenderPref("candles")}
@@ -556,7 +628,7 @@ export function CoinDetail({ coin, live, onBack }: Props) {
       </Card>
 
       {/* 图表 */}
-      <Card className="fade-up">
+      <Card>
         <CardContent className="pt-6">
           {error && !visible ? (
             <div className="flex h-80 flex-col items-center justify-center gap-3">
@@ -605,40 +677,42 @@ export function CoinDetail({ coin, live, onBack }: Props) {
         </CardContent>
       </Card>
 
-      {/* 多空观点：八指标综合判断，逐项列出 */}
-      {opinion ? (
-        <OpinionBoard
-          analysis={opinion}
-          title={t("coin.opinionTitle", { name: coin.name })}
-          description={t("coin.opinionDesc")}
-          badge={t("coin.opinionBadge", { n: opinion.indicators.length })}
-        />
-      ) : dailyLoading ? (
-        <Card className="fade-up">
-          <CardContent className="space-y-5 py-6">
-            <SkHeader title="w-40" />
-            <div className="space-y-4 px-4">
-              <Skeleton className="h-10 w-56 rounded-lg bg-secondary/50" />
-              <Skeleton className="h-2.5 w-full rounded-full bg-secondary/50" />
-              <div className="space-y-2.5 pt-2">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="flex items-center justify-between gap-4">
-                    <Skeleton className="h-3 w-36 rounded-full bg-secondary/60" />
-                    <Skeleton className="h-3.5 w-14 rounded-md" />
-                  </div>
-                ))}
+      {/* 多空观点：八指标综合判断，逐项列出（首屏之下，滚动显现） */}
+      <div data-reveal>
+        {opinion ? (
+          <OpinionBoard
+            analysis={opinion}
+            title={t("coin.opinionTitle", { name: coin.name })}
+            description={t("coin.opinionDesc")}
+            badge={t("coin.opinionBadge", { n: opinion.indicators.length })}
+          />
+        ) : dailyLoading ? (
+          <Card>
+            <CardContent className="space-y-5 py-6">
+              <SkHeader title="w-40" />
+              <div className="space-y-4 px-4">
+                <Skeleton className="h-10 w-56 rounded-lg bg-secondary/50" />
+                <Skeleton className="h-2.5 w-full rounded-full bg-secondary/50" />
+                <div className="space-y-2.5 pt-2">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="flex items-center justify-between gap-4">
+                      <Skeleton className="h-3 w-36 rounded-full bg-secondary/60" />
+                      <Skeleton className="h-3.5 w-14 rounded-md" />
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="fade-up">
-          <CardContent className="flex h-32 flex-col items-center justify-center gap-2 text-center">
-            <p className="text-sm font-semibold">{t("coin.opinionInsufficient")}</p>
-            <p className="text-xs text-muted-foreground">{t("coin.opinionInsufficientDesc")}</p>
-          </CardContent>
-        </Card>
-      )}
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardContent className="flex h-32 flex-col items-center justify-center gap-2 text-center">
+              <p className="text-sm font-semibold">{t("coin.opinionInsufficient")}</p>
+              <p className="text-xs text-muted-foreground">{t("coin.opinionInsufficientDesc")}</p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </main>
     </TooltipProvider>
   )

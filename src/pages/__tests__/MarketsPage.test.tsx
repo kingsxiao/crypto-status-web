@@ -1,16 +1,17 @@
 // @vitest-environment jsdom
 /**
- * 行情页排序 null 语义回归（MarketsPage.tsx:131-141，64c9f48 P1 修复）：
+ * 行情页排序 null 语义回归（MarketsPage 排序比较器，64c9f48 P1 修复）：
  * Binance 兜底数据源缺失的列（1h/7d/30d 涨跌、ATH）取值为 null，
  * 排序时 null 恒排末尾 —— 无论升序降序，且不与真实 0 混排。
  *
- * 只断言该语义。刻意不断言列宽与实时重排时序，也不在渲染后改 mock
- * tickers 驱动重排（ux-backup 包会给排序输入加快照捕获，两包实现须
- * 各自独立跑绿，此处只依赖两版一致的 null 恒排尾语义）。
+ * 另覆盖键盘交互：'/' 聚焦搜索（useSlashFocus）、表格行导航
+ * （useRowNav：↑↓ 在可进详情的行间移动、Enter 激活跳转、行内控件不劫持）。
+ *
+ * 刻意不断言列宽与实时重排时序，也不在渲染后改 mock tickers 驱动重排。
  */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { MemoryRouter } from "react-router-dom"
+import { MemoryRouter, Route, Routes } from "react-router-dom"
 
 import { setLocale } from "@/i18n"
 import { MarketsPage } from "@/pages/MarketsPage"
@@ -75,6 +76,14 @@ vi.mock("@/context/MarketDataContext", () => ({
 vi.mock("@/hooks/useFavorites", () => ({
   useFavorites: () => ({ favorites: [], has: () => false, toggle: () => {} }),
 }))
+// 交易对集合收敛为两个可进详情的币（alpha/gamma）：键盘行导航只索引这些行，
+// 断言「↑↓ 跳过不可进详情行」时数据确定，不依赖真实上线清单
+vi.mock("@/lib/realtime", () => ({
+  TRADE_SYMBOLS: {
+    alpha: { binance: "ALPHAUSDT", okx: "ALPHA-USDT" },
+    gamma: { binance: "GAMMAUSDT", okx: "GAMMA-USDT" },
+  },
+}))
 
 /* -------------------------------- 断言工具 -------------------------------- */
 
@@ -87,10 +96,18 @@ function rowNames(container: HTMLElement): (string | null | undefined)[] {
 
 function renderPage() {
   return render(
-    <MemoryRouter>
-      <MarketsPage />
+    <MemoryRouter initialEntries={["/"]}>
+      <Routes>
+        <Route path="/" element={<MarketsPage />} />
+        <Route path="/coin/:id" element={<div data-testid="coin-page" />} />
+      </Routes>
     </MemoryRouter>,
   )
+}
+
+/** 可键盘导航的行（有交易对 → data-row-nav-row） */
+function navRows(container: HTMLElement): HTMLElement[] {
+  return [...container.querySelectorAll<HTMLElement>("tr[data-row-nav-row]")]
 }
 
 describe("MarketsPage 排序 null 语义", () => {
@@ -125,5 +142,59 @@ describe("MarketsPage 排序 null 语义", () => {
     expect(rowNames(container)).toEqual(["NullBig", "Alpha", "Gamma", "Zero", "Beta", "NullSmall"])
     fireEvent.click(priceHead) // 升序
     expect(rowNames(container)).toEqual(["NullSmall", "Beta", "Zero", "Gamma", "Alpha", "NullBig"])
+  })
+})
+
+describe("MarketsPage 键盘交互", () => {
+  beforeEach(() => {
+    setLocale("zh")
+  })
+  afterEach(cleanup)
+
+  it("'/' 直接聚焦搜索框", () => {
+    renderPage()
+    const input = screen.getByPlaceholderText("搜索币种 / 代码")
+    expect(document.activeElement).not.toBe(input)
+    fireEvent.keyDown(window, { key: "/" })
+    expect(document.activeElement).toBe(input)
+    // 聚焦后再按 '/' 属于输入态：不抢焦点、不 preventDefault（正常落入输入框）
+    fireEvent.keyDown(input, { key: "/" })
+    expect(document.activeElement).toBe(input)
+  })
+
+  it("↑↓ 在可进详情的行间移动（跳过无交易对行），Enter 激活跳转详情", () => {
+    const { container } = renderPage()
+    const rows = navRows(container)
+    expect(rows.map((r) => r.textContent)).toHaveLength(2) // alpha + gamma
+
+    rows[0].focus()
+    expect(document.activeElement).toBe(rows[0])
+    // ↓：alpha → gamma（中间 beta/zero 无交易对，被跳过）
+    fireEvent.keyDown(rows[0], { key: "ArrowDown" })
+    expect(document.activeElement).toBe(rows[1])
+    // ↓ 到底钳位：仍停在 gamma
+    fireEvent.keyDown(rows[1], { key: "ArrowDown" })
+    expect(document.activeElement).toBe(rows[1])
+    // ↑ 回到 alpha；Home/End 跳首尾
+    fireEvent.keyDown(rows[1], { key: "ArrowUp" })
+    expect(document.activeElement).toBe(rows[0])
+    fireEvent.keyDown(rows[0], { key: "End" })
+    expect(document.activeElement).toBe(rows[1])
+    fireEvent.keyDown(rows[1], { key: "Home" })
+    expect(document.activeElement).toBe(rows[0])
+
+    // Enter 激活当前行 → 路由跳转 /coin/alpha
+    fireEvent.keyDown(rows[0], { key: "Enter" })
+    expect(screen.getByTestId("coin-page")).not.toBeNull()
+  })
+
+  it("焦点在行内控件（星标）上时 Space 不触发行跳转", () => {
+    const { container } = renderPage()
+    const star = container.querySelector<HTMLButtonElement>('tbody tr button[aria-label="加入自选"]')
+    expect(star).not.toBeNull()
+    star!.focus()
+    fireEvent.keyDown(star!, { key: " " })
+    // 未离开列表页（行导航对行内控件豁免）
+    expect(screen.queryByTestId("coin-page")).toBeNull()
   })
 })

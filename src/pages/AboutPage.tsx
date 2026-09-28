@@ -1,3 +1,4 @@
+import { NavLink } from "react-router-dom"
 import {
   ArrowUpDown,
   BellRing,
@@ -32,18 +33,19 @@ const FEATURES: [MessageKey, MessageKey, LucideIcon][] = [
   ["about.f10.title", "about.f10.desc", Scale],
 ]
 
-/** 页面清单：名称取词典 key，括注一句定位（desc 值自带顿号/逗号与句读） */
-const PAGES: [MessageKey, MessageKey][] = [
-  ["nav.dashboard", "about.pg.dash"],
-  ["nav.markets", "about.pg.markets"],
-  ["about.pg.coinName", "about.pg.coin"],
-  ["nav.sentiment", "about.pg.sentiment"],
-  ["nav.verdict", "about.pg.verdict"],
-  ["nav.converter", "about.pg.converter"],
-  ["nav.portfolio", "about.pg.portfolio"],
-  ["nav.alerts", "about.pg.alerts"],
-  ["nav.events", "about.pg.events"],
-  ["nav.about", "about.pg.about"],
+/** 页面清单：名称取词典 key，括注一句定位（desc 值自带顿号/逗号与句读），
+ * 第三项为路由链接；「币种详情」路由需具体 id，固定指演示对象 bitcoin */
+const PAGES: [MessageKey, MessageKey, string][] = [
+  ["nav.dashboard", "about.pg.dash", "/"],
+  ["nav.markets", "about.pg.markets", "/markets"],
+  ["about.pg.coinName", "about.pg.coin", "/coin/bitcoin"],
+  ["nav.sentiment", "about.pg.sentiment", "/sentiment"],
+  ["nav.verdict", "about.pg.verdict", "/verdict"],
+  ["nav.converter", "about.pg.converter", "/converter"],
+  ["nav.portfolio", "about.pg.portfolio", "/portfolio"],
+  ["nav.alerts", "about.pg.alerts", "/alerts"],
+  ["nav.events", "about.pg.events", "/events"],
+  ["nav.about", "about.pg.about", "/about"],
 ]
 
 const STACK = ["React 19", "TypeScript", "Vite 7", "Tailwind CSS 4", "React Router 7", "Radix UI", "原生 SVG 图表"]
@@ -62,7 +64,7 @@ export function AboutPage() {
         description={<>CRYPTO STATUS · {themeLabel} EDITION · v2.0</>}
       />
 
-      <Card className="fade-up" style={{ animationDelay: "60ms" }}>
+      <Card>
         <CardHeader>
           <CardHead title={t("about.what.title")} desc={t("about.what.desc")} />
         </CardHeader>
@@ -70,9 +72,15 @@ export function AboutPage() {
           <p>{t("about.what.p1")}</p>
           <p>
             {t("about.what.p2a")}
-            {PAGES.map(([key, desc]) => (
+            {PAGES.map(([key, desc, to]) => (
               <span key={key}>
-                <b className="text-foreground">{t(key)}</b>
+                {/* 页名升级为路由链接：虚线脚注线暗示可跳转，hover 才亮 primary */}
+                <NavLink
+                  to={to}
+                  className="font-semibold text-foreground underline decoration-border decoration-dashed underline-offset-4 transition-colors hover:text-primary hover:decoration-primary"
+                >
+                  {t(key)}
+                </NavLink>
                 {t(desc)}
               </span>
             ))}
@@ -80,11 +88,11 @@ export function AboutPage() {
         </CardContent>
       </Card>
 
-      <Card className="fade-up" style={{ animationDelay: "120ms" }}>
+      <Card>
         <CardHeader>
           <CardHead title={t("about.features.title")} desc={t("about.features.desc")} />
         </CardHeader>
-        <CardContent className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
+        <CardContent className="stagger grid gap-x-8 gap-y-4 sm:grid-cols-2">
           {FEATURES.map(([title, desc, Icon]) => (
             <div key={title} className="flex gap-3">
               <IconChip><Icon /></IconChip>
@@ -97,7 +105,7 @@ export function AboutPage() {
         </CardContent>
       </Card>
 
-      <Card className="fade-up" style={{ animationDelay: "180ms" }}>
+      <Card>
         <CardHeader>
           <CardHead title={t("about.stack.title")} />
         </CardHeader>
@@ -105,7 +113,7 @@ export function AboutPage() {
           {STACK.map((s) => (
             <span
               key={s}
-              className="rounded border border-border px-2 py-1 font-mono text-[11px] text-muted-foreground"
+              className="rounded border border-border px-2 py-1 font-mono text-[11px] text-muted-foreground transition-colors hover:border-muted-foreground/50 hover:text-foreground"
             >
               {s}
             </span>
@@ -113,7 +121,7 @@ export function AboutPage() {
         </CardContent>
       </Card>
 
-      <p className="fade-up text-center text-[10px] leading-relaxed text-muted-foreground" style={{ animationDelay: "240ms" }}>
+      <p className="text-center text-[10px] leading-relaxed text-muted-foreground">
         {t("about.disclaimer")}
       </p>
     </main>

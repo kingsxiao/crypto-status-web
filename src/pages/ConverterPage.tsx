@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react"
-import { Bitcoin, ChevronDown, DollarSign } from "lucide-react"
+import { useMemo, useRef, useState } from "react"
+import { ArrowUpDown, Bitcoin, ChevronDown, DollarSign, MoveHorizontal } from "lucide-react"
 
+import { AnimatedNumber } from "@/components/ui/animated-number"
 import { Card, CardContent, CardHead, CardHeader } from "@/components/ui/card"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { IconChip } from "@/components/ui/icon-chip"
@@ -19,7 +20,7 @@ import { AssetCell, LivePrice } from "@/components/price-cells"
 import { useLive, useMarket } from "@/context/MarketDataContext"
 import { t, useT } from "@/i18n"
 import { usePageMeta } from "@/hooks/usePageMeta"
-import { formatAmount, formatPrice } from "@/lib/format"
+import { formatAmount, formatPrice, parseNum } from "@/lib/format"
 
 function CoinSelect({
   value,
@@ -36,7 +37,7 @@ function CoinSelect({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         aria-label={t("coin.selectLabel")}
-        className="h-11 w-full appearance-none rounded-md border border-input bg-background px-3 pr-8 font-mono text-sm font-semibold uppercase outline-none transition-colors focus-visible:border-foreground/60 focus-visible:ring-2 focus-visible:ring-ring/30"
+        className="h-10 w-full appearance-none rounded-md border border-input bg-background px-3 pr-8 font-mono text-sm font-semibold uppercase outline-none transition-colors focus-visible:border-foreground/60 focus-visible:ring-2 focus-visible:ring-ring/30"
       >
         {options.map((c) => (
           <option key={c.id} value={c.id}>
@@ -49,7 +50,67 @@ function CoinSelect({
   )
 }
 
-const QUICK = [0.1, 0.5, 1, 10, 100]
+const CRYPTO_QUICK = [0.01, 0.1, 0.5, 1, 5, 10, 100]
+const USD_QUICK = [
+  { v: 100, label: "$100" },
+  { v: 1000, label: "$1k" },
+  { v: 5000, label: "$5k" },
+  { v: 10000, label: "$10k" },
+  { v: 100000, label: "$100k" },
+]
+
+/* ------------------------------ 结果块拖拽调额 ------------------------------ */
+
+/** 步进 ≈ 数量级的 1/10(0.5 → 0.01、100 → 1、$1000 → $100) */
+function stepFor(v: number): number {
+  return Math.pow(10, Math.floor(Math.log10(v)) - 1)
+}
+
+/** 按步进的有效小数位取整为干净字符串(0.1+0.01*3 → "0.13") */
+function formatStep(v: number, step: number): string {
+  const dec = Math.max(0, -Math.floor(Math.log10(step) + 1e-9))
+  return v.toFixed(dec)
+}
+
+/**
+ * 结果块水平拖拽 → 按步进增减输入框金额(指针事件直接改 state,
+ * 非 JS 逐帧位移动画;每次移动从按下时的起点重算,无闭包过期)。
+ * 键盘路径不受影响:输入框本身始终可用。
+ */
+function useDragAdjust(amount: string, set: (v: string) => void) {
+  const origin = useRef<{ x: number; start: number } | null>(null)
+  return {
+    onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return
+      const cur = parseNum(amount)
+      if (!Number.isFinite(cur) || cur <= 0) return
+      origin.current = { x: e.clientX, start: cur }
+      e.currentTarget.setPointerCapture(e.pointerId)
+    },
+    onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => {
+      const o = origin.current
+      if (!o) return
+      const step = stepFor(o.start)
+      const next = Math.max(0, o.start + Math.round((e.clientX - o.x) / 8) * step)
+      set(formatStep(next, step))
+    },
+    onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => {
+      origin.current = null
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      }
+    },
+  }
+}
+
+function DragHint() {
+  return (
+    <div className="type-meta mt-1.5 flex items-center gap-1 text-muted-foreground/60">
+      <MoveHorizontal className="size-3 shrink-0" aria-hidden />
+      {t("cv.dragHint")}
+    </div>
+  )
+}
 
 export function ConverterPage() {
   useT()
@@ -62,6 +123,8 @@ export function ConverterPage() {
   const [cryptoAmt, setCryptoAmt] = useState("1")
   const [usdTargetId, setUsdTargetId] = useState("ethereum")
   const [usdAmt, setUsdAmt] = useState("1000")
+  // swap 累计旋转角:每次 +180°,transform transition 一次性转过去(不走 keyframes)
+  const [swapTurns, setSwapTurns] = useState(0)
 
   const options = useMemo(
     () => coins.map((c) => ({ id: c.id, symbol: c.symbol, name: c.name })),
@@ -87,6 +150,16 @@ export function ConverterPage() {
   const activeCoin = coins.find((c) => c.id === cryptoId)
   const targetCoin = coins.find((c) => c.id === usdTargetId)
 
+  /** 互换两侧币种(方向随之对调):左卡币种 ↔ 右卡目标币种,金额不动 */
+  const swap = () => {
+    setCryptoId(usdTargetId)
+    setUsdTargetId(cryptoId)
+    setSwapTurns((n) => n + 1)
+  }
+
+  const dragCrypto = useDragAdjust(cryptoAmt, setCryptoAmt)
+  const dragUsd = useDragAdjust(usdAmt, setUsdAmt)
+
   if (loading && !snapshot) {
     return (
       <main className="mx-auto w-full max-w-5xl flex-1 2xl:max-w-[1280px] 2xl:px-10 space-y-4 px-4 pb-20 pt-6 sm:px-6">
@@ -104,12 +177,12 @@ export function ConverterPage() {
               </div>
               {/* 输入行 + 快捷金额 */}
               <div className="grid grid-cols-2 gap-2 pt-1">
-                <Skeleton className="h-11 rounded-md" />
-                <Skeleton className="h-11 rounded-md bg-secondary/60" />
+                <Skeleton className="h-10 rounded-md" />
+                <Skeleton className="h-10 rounded-md bg-secondary/60" />
               </div>
               <div className="flex gap-1.5">
                 {Array.from({ length: 4 }).map((_, j) => (
-                  <Skeleton key={j} className="h-7 w-11 rounded border border-border/50 bg-secondary/45" />
+                  <Skeleton key={j} className="h-9 w-12 rounded border border-border/50 bg-secondary/45" />
                 ))}
               </div>
               {/* 结果块 */}
@@ -133,7 +206,8 @@ export function ConverterPage() {
         description={t("page.converter.desc")}
       />
 
-      <div className="fade-up grid items-stretch gap-4 md:grid-cols-2" style={{ animationDelay: "60ms" }}>
+      {/* 双卡 + 中列 swap:md+ 三列栅格,窄屏堆叠时 swap 行落两卡之间 */}
+      <div className="grid items-stretch gap-4 md:grid-cols-[1fr_auto_1fr]">
         {/* 加密货币 → USD */}
         <Card className="h-full">
           <CardHeader>
@@ -149,12 +223,12 @@ export function ConverterPage() {
               desc={t("cv.crypto2usdDesc")}
             />
           </CardHeader>
-          <CardContent className="flex flex-1 flex-col gap-4">
+          <CardContent className="stagger flex flex-1 flex-col gap-4">
             <div className="grid grid-cols-[1fr_1fr] gap-2">
               <div>
                 <label
                   htmlFor="cv-crypto-amount"
-                  className="mb-1 block font-mono text-[10px] tracking-wider text-muted-foreground uppercase"
+                  className="type-label mb-1 block text-muted-foreground"
                 >
                   {t("cv.amount")}
                 </label>
@@ -164,11 +238,11 @@ export function ConverterPage() {
                   value={cryptoAmt}
                   onChange={(e) => setCryptoAmt(e.target.value)}
                   placeholder="0.00"
-                  className="h-11 font-mono text-lg font-semibold tabular"
+                  className="h-10 font-mono text-lg font-semibold tabular"
                 />
               </div>
               <div>
-                <label className="mb-1 block font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
+                <label className="type-label mb-1 block text-muted-foreground">
                   {t("cv.asset")}
                 </label>
                 <CoinSelect value={cryptoId} onChange={setCryptoId} options={options} />
@@ -176,33 +250,61 @@ export function ConverterPage() {
             </div>
 
             <div className="flex flex-wrap gap-1.5">
-              {QUICK.map((q) => (
+              {CRYPTO_QUICK.map((q) => (
                 <button
                   key={q}
                   type="button"
                   onClick={() => setCryptoAmt(String(q))}
-                  className="rounded border border-border px-2.5 py-1 font-mono text-[11px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+                  className="inline-flex h-9 items-center justify-center rounded border border-border px-3 font-mono text-[11px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
                 >
                   {q}
                 </button>
               ))}
             </div>
 
-            <div className="mt-auto rounded-lg bg-secondary/60 p-4">
-              <div className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
-                {t("cv.approxUsd")}
-              </div>
-              <div className="mt-1 font-mono text-3xl font-bold tabular break-all">
-                {usdResult != null ? `$${formatPrice(usdResult)}` : "—"}
+            <div
+              className="mt-auto cursor-ew-resize touch-pan-y rounded-lg bg-secondary/60 p-4 select-none"
+              onPointerDown={dragCrypto.onPointerDown}
+              onPointerMove={dragCrypto.onPointerMove}
+              onPointerUp={dragCrypto.onPointerUp}
+              onPointerCancel={dragCrypto.onPointerUp}
+            >
+              <div className="type-label text-muted-foreground">{t("cv.approxUsd")}</div>
+              <div className="type-num-xl mt-1.5 break-all">
+                {usdResult != null ? (
+                  <AnimatedNumber value={usdResult} format={(v) => `$${formatPrice(v)}`} />
+                ) : (
+                  "—"
+                )}
               </div>
               {activeCoin && cryptoPrice != null && (
-                <div className="mt-1.5 font-mono text-[10px] text-muted-foreground">
+                <div className="type-meta mt-1.5">
                   1 {activeCoin.symbol.toUpperCase()} = ${formatPrice(cryptoPrice)}
                 </div>
               )}
+              <DragHint />
             </div>
           </CardContent>
         </Card>
+
+        {/* 中列:互换两侧币种 */}
+        <div className="flex items-center justify-center md:px-1">
+          <button
+            type="button"
+            aria-label={t("cv.swap")}
+            title={t("cv.swap")}
+            onClick={swap}
+            className="focus-visible:ring-ring/40 flex size-10 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-xs transition-[color,border-color] duration-150 hover:border-foreground/50 hover:text-foreground focus-visible:ring-2 focus-visible:outline-none"
+          >
+            <ArrowUpDown
+              className="size-4"
+              style={{
+                transform: `rotate(${swapTurns * 180}deg)`,
+                transition: "transform 0.4s var(--ease-soft)",
+              }}
+            />
+          </button>
+        </div>
 
         {/* USD → 加密货币 */}
         <Card className="h-full">
@@ -219,12 +321,12 @@ export function ConverterPage() {
               desc={t("cv.usd2cryptoDesc")}
             />
           </CardHeader>
-          <CardContent className="flex flex-1 flex-col gap-4">
+          <CardContent className="stagger flex flex-1 flex-col gap-4">
             <div className="grid grid-cols-[1fr_1fr] gap-2">
               <div>
                 <label
                   htmlFor="cv-usd-amount"
-                  className="mb-1 block font-mono text-[10px] tracking-wider text-muted-foreground uppercase"
+                  className="type-label mb-1 block text-muted-foreground"
                 >
                   {t("cv.usdAmount")}
                 </label>
@@ -234,11 +336,11 @@ export function ConverterPage() {
                   value={usdAmt}
                   onChange={(e) => setUsdAmt(e.target.value)}
                   placeholder="1000"
-                  className="h-11 font-mono text-lg font-semibold tabular"
+                  className="h-10 font-mono text-lg font-semibold tabular"
                 />
               </div>
               <div>
-                <label className="mb-1 block font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
+                <label className="type-label mb-1 block text-muted-foreground">
                   {t("cv.targetAsset")}
                 </label>
                 <CoinSelect value={usdTargetId} onChange={setUsdTargetId} options={options} />
@@ -246,37 +348,48 @@ export function ConverterPage() {
             </div>
 
             <div className="flex flex-wrap gap-1.5">
-              {[100, 1000, 10000].map((q) => (
+              {USD_QUICK.map((q) => (
                 <button
-                  key={q}
+                  key={q.v}
                   type="button"
-                  onClick={() => setUsdAmt(String(q))}
-                  className="rounded border border-border px-2.5 py-1 font-mono text-[11px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+                  onClick={() => setUsdAmt(String(q.v))}
+                  className="inline-flex h-9 items-center justify-center rounded border border-border px-3 font-mono text-[11px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
                 >
-                  ${q.toLocaleString()}
+                  {q.label}
                 </button>
               ))}
             </div>
 
-            <div className="mt-auto rounded-lg bg-secondary/60 p-4">
-              <div className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
+            <div
+              className="mt-auto cursor-ew-resize touch-pan-y rounded-lg bg-secondary/60 p-4 select-none"
+              onPointerDown={dragUsd.onPointerDown}
+              onPointerMove={dragUsd.onPointerMove}
+              onPointerUp={dragUsd.onPointerUp}
+              onPointerCancel={dragUsd.onPointerUp}
+            >
+              <div className="type-label text-muted-foreground">
                 ≈ {targetCoin ? targetCoin.symbol.toUpperCase() : t("cv.coinFallback")}
               </div>
-              <div className="mt-1 font-mono text-3xl font-bold tabular break-all">
-                {coinResult != null ? formatAmount(coinResult) : "—"}
+              <div className="type-num-xl mt-1.5 break-all">
+                {coinResult != null ? (
+                  <AnimatedNumber value={coinResult} format={(v) => formatAmount(v)} />
+                ) : (
+                  "—"
+                )}
               </div>
               {targetCoin && usdTargetPrice != null && (
-                <div className="mt-1.5 font-mono text-[10px] text-muted-foreground">
+                <div className="type-meta mt-1.5">
                   $1,000 = {formatAmount(1000 / usdTargetPrice)} {targetCoin.symbol.toUpperCase()}
                 </div>
               )}
+              <DragHint />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* 快速换算参考：填充页面下部留白，提供常用面额速查 */}
-      <Card className="fade-up" style={{ animationDelay: "120ms" }}>
+      {/* 快速换算参考:填充页面下部留白,提供常用面额速查 */}
+      <Card>
         <CardHeader>
           <CardHead title={t("cv.quickTitle")} desc={t("cv.quickDesc")}>
             <span className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
@@ -329,7 +442,7 @@ export function ConverterPage() {
         </CardContent>
       </Card>
 
-      <p className="fade-up text-center text-[10px] text-muted-foreground" style={{ animationDelay: "120ms" }}>
+      <p className="text-center text-[10px] text-muted-foreground">
         {t("cv.disclaimer")}
       </p>
     </main>

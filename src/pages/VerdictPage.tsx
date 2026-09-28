@@ -19,6 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useMarket } from "@/context/MarketDataContext"
 import { t, tm, useT, type LMsg, type MessageKey } from "@/i18n"
 import { usePageMeta } from "@/hooks/usePageMeta"
+import { useReveal } from "@/hooks/useReveal"
 import {
   computeVerdict,
   cryptoMcapOf,
@@ -42,7 +43,9 @@ function WatchCard({ items }: { items: LMsg[] }) {
         />
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-2.5">
-        <div className="flex-1 space-y-2.5">
+        {/* 观察项少时纵向均匀铺满（justify-evenly），不留大片空黑；
+            项多时 gap 兜底间距，与左侧卡高度对齐 */}
+        <div className="stagger flex flex-1 flex-col justify-evenly gap-2.5 py-1">
           {items.map((w) => (
             <div key={w.key} className="flex gap-2.5 text-xs leading-relaxed">
               <span className="mt-1.5 size-1.5 shrink-0 rounded-full border border-primary" />
@@ -50,7 +53,7 @@ function WatchCard({ items }: { items: LMsg[] }) {
             </div>
           ))}
         </div>
-        <p className="mt-auto border-t border-border/60 pt-2.5 text-[10px] leading-relaxed text-muted-foreground/70">
+        <p className="border-t border-border/60 pt-2.5 text-[10px] leading-relaxed text-muted-foreground/70">
           {t("vp.reviewNote")}
         </p>
       </CardContent>
@@ -168,6 +171,9 @@ export function VerdictPage() {
   useT()
   usePageMeta({ title: t("meta.verdict"), description: t("page.verdict.desc") })
   const { snapshot, error, loading, refresh } = useMarket()
+  // 折叠线以下的指标明细 section：滚动显现（首屏由 route-fade 承担；
+  // 判断历史行与体量参照条由各自组件内的 reveal / 生长动效负责，不叠加）
+  const pageReveal = useReveal<HTMLElement>("[data-page-reveal]")
 
   const [cross, setCross] = useState<CrossAssetData | null>(null)
   const [crossError, setCrossError] = useState(false)
@@ -254,7 +260,10 @@ export function VerdictPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-7xl flex-1 2xl:max-w-[1680px] 2xl:px-10 space-y-6 px-4 pb-20 pt-6 sm:px-6">
+    <main
+      ref={pageReveal}
+      className="mx-auto w-full max-w-7xl flex-1 2xl:max-w-[1680px] 2xl:px-10 space-y-6 px-4 pb-20 pt-6 sm:px-6"
+    >
       {/* 页头 */}
       <PageHeader
         en="Verdict"
@@ -281,26 +290,26 @@ export function VerdictPage() {
 
       {verdict && snapshot ? (
         <>
-          {/* 第一屏：立场 / 分布 / 关注 */}
-          <section className="fade-up grid gap-4 lg:grid-cols-12">
+          {/* 第一屏：立场 / 分布 / 关注（整页入场由 route-fade 承担） */}
+          <section className="grid gap-4 lg:grid-cols-12">
             <div className="lg:col-span-5">
               <VerdictCard verdict={verdict} />
             </div>
-            <div className="lg:col-span-4" style={{ animationDelay: "60ms" }}>
+            <div className="lg:col-span-4">
               <StanceMixCard verdict={verdict} />
             </div>
-            <div className="lg:col-span-3" style={{ animationDelay: "120ms" }}>
+            <div className="lg:col-span-3">
               <WatchCard items={verdict.watch} />
             </div>
           </section>
 
           {/* 指标明细 */}
-          <section className="fade-up" style={{ animationDelay: "160ms" }}>
+          <section data-page-reveal>
             <CrossAssetTable verdict={verdict} missing={missingKeys.map((k) => t(k))} />
           </section>
 
           {/* 体量参照 + 判断历史 */}
-          <section className="fade-up grid gap-4 lg:grid-cols-12" style={{ animationDelay: "200ms" }}>
+          <section className="grid gap-4 lg:grid-cols-12">
             <div className="lg:col-span-7">
               <MarketAnchorsCard cryptoMcap={cryptoMcapOf(snapshot.global, snapshot.coins)} />
             </div>
@@ -310,14 +319,14 @@ export function VerdictPage() {
           </section>
 
           {/* 数据源与口径说明 */}
-          <footer className="fade-up space-y-1 pb-4 text-[11px] leading-relaxed text-muted-foreground">
+          <footer className="space-y-1 pb-4 text-[11px] leading-relaxed text-muted-foreground">
             <p>{t("vp.sources1")}</p>
             <p>{t("vp.sources2")}</p>
           </footer>
         </>
       ) : (
         /* 快照已就绪、跨资产数据仍在拉取的过渡态:轻量居中指示,避免全页骨架二次闪烁 */
-        <Card className="fade-up">
+        <Card>
           <CardContent className="flex h-72 flex-col items-center justify-center gap-3">
             <LoadingDots className="scale-125" />
             <p className="text-xs text-muted-foreground">{t("vp.loadingCross")}</p>

@@ -18,6 +18,16 @@ export type ThemeId = (typeof THEMES)[number]["id"]
 
 const STORAGE_KEY = STORAGE_KEYS.theme
 
+/**
+ * 各主题 background 的 hex 近似值，用于同步 <meta name="theme-color">
+ * （PWA 状态栏 / 移动端浏览器顶栏配色；index.html 初始值 #171717 = mono）。
+ */
+const THEME_COLORS: Record<ThemeId, string> = {
+  mono: "#171717", // oklch(0.09 0 0)
+  blue: "#020817", // hsl(222.2 84% 4.9%)
+  violet: "#030712", // hsl(224 71.4% 4.1%)
+}
+
 function normalize(v: string | null): ThemeId {
   return THEMES.some((t) => t.id === v) ? (v as ThemeId) : "mono"
 }
@@ -41,7 +51,17 @@ function getSnapshot(): ThemeId {
 export function setTheme(t: ThemeId) {
   if (t === getSnapshot()) return
   current = t
-  document.documentElement.dataset.theme = t
+  const root = document.documentElement
+  // 主题平滑过渡：临时挂 html.theme-anim（index.css 对 background-color /
+  // border-color / color / fill / stroke 开 250ms 过渡），300ms 后移除。
+  // 窗口内会临时覆盖 .card-hover 等元素的 transition-property，属已知可接受行为。
+  root.classList.add("theme-anim")
+  root.dataset.theme = t
+  window.setTimeout(() => root.classList.remove("theme-anim"), 300)
+  // 同步 PWA/移动端顶栏颜色（index.html 初始 #171717）
+  document
+    .querySelector('meta[name="theme-color"]')
+    ?.setAttribute("content", THEME_COLORS[t])
   storageSet(STORAGE_KEY, t)
   listeners.forEach((l) => l())
 }

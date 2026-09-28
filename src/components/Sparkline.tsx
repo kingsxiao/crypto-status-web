@@ -8,6 +8,12 @@ interface SparklineProps {
   height?: number
   className?: string
   strokeWidth?: number
+  /** 端点圆点（最新值标记，opt-in 默认关）。常渲染、由行容器 group-hover 点亮
+   *  （纯 CSS 联动：行级 hover state 会让整页表格逐行全量重渲染） */
+  showDot?: boolean
+  /** 描线进场：stroke-dasharray + pathLength 归一化，900ms 一次性（opt-in 默认关）。
+   *  数据后续刷新不会重播（元素不重挂则 animation 不重启） */
+  animateDraw?: boolean
 }
 
 /** 单色火花线：白色描线 + 向下渐隐的面积填充 */
@@ -17,11 +23,13 @@ export const Sparkline = memo(function Sparkline({
   height = 36,
   className,
   strokeWidth = 1.5,
+  showDot = false,
+  animateDraw = false,
 }: SparklineProps) {
   const gradientId = useMemo(() => `sg-${Math.random().toString(36).slice(2, 8)}`, [])
 
-  const { line, area } = useMemo(() => {
-    if (data.length < 2) return { line: "", area: "" }
+  const { line, area, lastX, lastY } = useMemo(() => {
+    if (data.length < 2) return { line: "", area: "", lastX: 0, lastY: 0 }
     const min = Math.min(...data)
     const max = Math.max(...data)
     const span = max - min || 1
@@ -33,7 +41,8 @@ export const Sparkline = memo(function Sparkline({
     })
     const d = pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`).join(" ")
     const a = `${d} L${width},${height} L0,${height} Z`
-    return { line: d, area: a }
+    const [lx, ly] = pts[pts.length - 1]
+    return { line: d, area: a, lastX: lx, lastY: ly }
   }, [data, width, height, strokeWidth])
 
   if (!line) {
@@ -62,7 +71,16 @@ export const Sparkline = memo(function Sparkline({
         strokeWidth={strokeWidth}
         strokeLinejoin="round"
         strokeLinecap="round"
+        pathLength={animateDraw ? 1 : undefined}
+        className={animateDraw ? "spark-draw" : undefined}
       />
+      {showDot && (
+        <g className="opacity-0 transition-opacity duration-[160ms] [transition-timing-function:var(--ease-soft)] group-hover:opacity-100">
+          {/* 端点光晕：颜色取自主题 token 层，不引入新色相 */}
+          <circle cx={lastX} cy={lastY} r={strokeWidth * 2.6} fill="currentColor" opacity={0.18} />
+          <circle cx={lastX} cy={lastY} r={strokeWidth} fill="currentColor" />
+        </g>
+      )}
     </svg>
   )
 })

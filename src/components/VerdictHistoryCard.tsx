@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardKicker } from "@/components/ui/card"
 import { stanceStyle } from "@/components/stance-style"
 import { t, useT, type MessageKey } from "@/i18n"
+import { useReveal } from "@/hooks/useReveal"
 import {
   gradeRecord,
   gradeStats,
@@ -43,6 +44,8 @@ export const VerdictHistoryCard = memo(function VerdictHistoryCard({
   useT()
   const stats = gradeStats(history)
   const rows = [...history].reverse().slice(0, 14)
+  // 行级滚动显现：长列表滚到哪显现到哪（reduced-motion / 无 JS 时静态呈现）
+  const revealRef = useReveal<HTMLDivElement>()
 
   return (
     <Card className="h-full border-border/80">
@@ -70,7 +73,7 @@ export const VerdictHistoryCard = memo(function VerdictHistoryCard({
         />
       </CardHeader>
 
-      <CardContent>
+      <CardContent ref={revealRef}>
         {rows.length === 0 ? (
           <p className="py-8 text-center text-xs text-muted-foreground">
             {t("vh.empty")}
@@ -88,9 +91,10 @@ export const VerdictHistoryCard = memo(function VerdictHistoryCard({
               return (
                 <li
                   key={r.date}
+                  data-reveal
                   className="flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 transition-colors hover:border-border hover:bg-secondary/40"
                 >
-                  <span className="w-[72px] shrink-0 font-mono text-xs tabular text-muted-foreground">
+                  <span className="type-num w-[72px] shrink-0 text-xs text-muted-foreground">
                     {r.date.slice(5)}
                   </span>
                   <Badge
@@ -109,7 +113,7 @@ export const VerdictHistoryCard = memo(function VerdictHistoryCard({
                   </span>
                   <span
                     className={cn(
-                      "ml-auto shrink-0 font-mono text-xs tabular font-semibold",
+                      "type-num ml-auto shrink-0 text-xs",
                       r.mcapChg24h > 0 ? "text-up" : r.mcapChg24h < 0 ? "text-down" : "text-muted-foreground",
                     )}
                     title={t("vh.mcapTitle")}

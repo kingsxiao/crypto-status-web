@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Maximize2 } from "lucide-react"
 
 import { t, useT } from "@/i18n"
 import type { Candle } from "@/lib/kline"
@@ -33,6 +34,17 @@ const PAD_R = 56
 const PAD_L = 6
 const AXIS_H = 20
 const VOL_RATIO = 0.2
+/** 窗口缩放下限：再少蜡烛失读数意义（上限 = 全量） */
+const MIN_BARS = 15
+
+/**
+ * 可见窗口 [start, start+count)——索引指向全量 candles。
+ * null = 未缩放/未平移，跟随全量（数据追加时自动跟随右沿）。
+ */
+interface View {
+  start: number
+  count: number
+}
 
 function linePath(pts: (readonly [number, number] | null)[]): string {
   let d = ""
@@ -76,8 +88,9 @@ const fmtVol = (v: number) =>
 /* 斐波那契档位标签：0 → "0"、0.236 → "0.236"、0.5 → "0.5" */
 const fibRatioLabel = (r: number) => r.toFixed(3).replace(/\.?0+$/, "")
 
-interface ChartModel {
-  closes: number[]
+/** 全量指标层：对输入序列整算一次，窗口缩放/平移只切片显示、绝不重算
+ *  （切片重算会让 MA99 预热空值、RSI/MACD/KDJ 窗口播种漂移、fib 随平移跳线） */
+interface IndicatorLayer {
   ma7: (number | null)[] | null
   ma25: (number | null)[] | null
   ma99: (number | null)[] | null
@@ -86,6 +99,17 @@ interface ChartModel {
   macd: { dif: (number | null)[]; dea: (number | null)[]; hist: (number | null)[] } | null
   kdj: { k: (number | null)[]; d: (number | null)[]; j: (number | null)[] } | null
   fib: AutoFib | null
+}
+
+interface ChartModel {
+  ma7: (number | null)[] | null
+  ma25: (number | null)[] | null
+  ma99: (number | null)[] | null
+  boll: { upper: (number | null)[]; mid: (number | null)[]; lower: (number | null)[] } | null
+  rsi: (number | null)[] | null
+  macd: { dif: (number | null)[]; dea: (number | null)[]; hist: (number | null)[] } | null
+  kdj: { k: (number | null)[]; d: (number | null)[]; j: (number | null)[] } | null
+  fib: (AutoFib & { startIndex: number; endIndex: number }) | null
   pMin: number
   pMax: number
   vMax: number
@@ -107,8 +131,9 @@ interface SubPane {
 
 /**
  * 静态图层：网格 / 蜡烛 / 均线 / 副图 / 时间轴。
- * hover 十字光标移动时这些内容完全不变，抽成 memo 组件后
- * 光标移动只重渲染十字线与读数条，不再 reconcile 上千个 SVG 节点。
+ * 输入一律是「窗口切片」：candles 与 model 内各序列按可见窗口对齐，
+ * model.x(i) 以窗口局部索引定位。hover 十字光标移动时这些内容完全不变，
+ * 抽成 memo 组件后光标移动只重渲染十字线与读数条，不再 reconcile 上千个 SVG 节点。
  */
 const ChartLayers = memo(function ChartLayers({
   candles,
@@ -224,7 +249,9 @@ const ChartLayers = memo(function ChartLayers({
         </>
       )}
 
-      {/* 斐波那契回撤：区间极值自动定起止价，水平档位线向右延伸 */}
+      {/* 斐波那契回撤：区间极值自动定起止价，水平档位线向右延伸。
+       *  起止索引已平移到窗口局部坐标系，锚点在窗口外时为负值——线段自画外伸入，
+     *  平移窗口 fib 不跳线（极值在全量序列上算定） */}
       {model.fib && (
         <g>
           {(() => {
@@ -284,7 +311,7 @@ const ChartLayers = memo(function ChartLayers({
         </g>
       )}
 
-      {/* 最新价虚线 + 涨跌色价签 */}
+      {/* 可见窗口末根K线：虚线 + 涨跌色价签（全量视图下即最新价） */}
       <line
         x1={PAD_L}
         x2={w - PAD_R}
@@ -382,9 +409,43 @@ const ChartLayers = memo(function ChartLayers({
 export const CandleChart = memo(function CandleChart({ candles, renderMode, overlays, panes, intervalKey }: Props) {
   useT()
   const wrapRef = useRef<HTMLDivElement>(null)
+  const svgRef = useRef<SVGSVGElement>(null)
   const [w, setW] = useState(860)
   const [hover, setHover] = useState<{ idx: number; x: number; y: number } | null>(null)
   const rafRef = useRef<number | null>(null)
+
+  /* 可见窗口：null = 全量视图（随数据更新自动跟随） */
+  const [view, setView] = useState<View | null>(null)
+  const len = candles.length
+
+  const win: View = useMemo(() => {
+    if (!view) return { start: 0, count: len }
+    const count = Math.max(1, Math.min(view.count, len))
+    const start = Math.max(0, Math.min(view.start, len - count))
+    return view.start === start && view.count === count ? view : { start, count }
+  }, [view, len])
+
+  /* 数据更新时的窗口维护：
+   *  - 实时 tick 合并 / 同长度轮询替换：窗口原样保留（用户的缩放不被打扰）
+   *  - 轮询滚入新K线（长度 +1/+2）：窗口贴右沿时跟随右移
+   *  - 切范围/切数据集（长度大变）：重置回全量视图 */
+  const prevLenRef = useRef(len)
+  useEffect(() => {
+    const prev = prevLenRef.current
+    prevLenRef.current = len
+    if (prev === len) return
+    setView((v) => {
+      if (!v) return null
+      const diff = len - prev
+      if (Math.abs(diff) > 2) return null
+      const count = Math.max(1, Math.min(v.count, len))
+      const pinned = v.start + v.count >= prev // 原本贴着右沿
+      const raw = pinned ? len - count : v.start
+      const start = Math.max(0, Math.min(raw, len - count))
+      if (start === v.start && count === v.count) return v
+      return { start, count }
+    })
+  }, [len])
 
   useEffect(() => {
     const el = wrapRef.current
@@ -406,24 +467,54 @@ export const CandleChart = memo(function CandleChart({ candles, renderMode, over
   const volH = mainH * VOL_RATIO
   const priceH = mainH - volH - 6
 
-  const model = useMemo<ChartModel | null>(() => {
-    if (candles.length < 2) return null
+  /* 全量指标：对输入序列整算一次（SMA/BOLL/RSI/MACD/KDJ/autoFibonacci），
+   * 与窗口无关；窗口切换只切它们的输出序列，标度（pMin/pMax/step/cw）另算 */
+  const indicators = useMemo<IndicatorLayer | null>(() => {
+    if (len < 2) return null
     const closes = candles.map((c) => c.close)
     const highs = candles.map((c) => c.high)
     const lows = candles.map((c) => c.low)
+    return {
+      ma7: overlays.ma ? smaSeries(closes, 7) : null,
+      ma25: overlays.ma ? smaSeries(closes, 25) : null,
+      ma99: overlays.ma ? smaSeries(closes, 99) : null,
+      boll: overlays.boll ? bollSeries(closes, 20, 2) : null,
+      rsi: panes.rsi ? rsiSeries(closes, 14) : null,
+      macd: panes.macd ? macdSeries(closes) : null,
+      kdj: panes.kdj ? kdjSeries(highs, lows, closes) : null,
+      fib: overlays.fib ? autoFibonacci(candles) : null,
+    }
+  }, [candles, overlays, panes, len])
 
-    const ma7 = overlays.ma ? smaSeries(closes, 7) : null
-    const ma25 = overlays.ma ? smaSeries(closes, 25) : null
-    const ma99 = overlays.ma ? smaSeries(closes, 99) : null
-    const boll = overlays.boll ? bollSeries(closes, 20, 2) : null
-    const rsi = panes.rsi ? rsiSeries(closes, 14) : null
-    const macd = panes.macd ? macdSeries(closes) : null
-    const kdj = panes.kdj ? kdjSeries(highs, lows, closes) : null
-    const fib = overlays.fib ? autoFibonacci(candles) : null
+  /* 窗口模型：指标输出按 [start,end) 切片 + 标度在窗口上重算 */
+  const model = useMemo<ChartModel | null>(() => {
+    if (!indicators) return null
+    const { start, count } = win
+    const end = start + count
+    const winCandles = candles.slice(start, end)
+    const cut = (s: (number | null)[] | null) => (s ? s.slice(start, end) : null)
+
+    const ma7 = cut(indicators.ma7)
+    const ma25 = cut(indicators.ma25)
+    const ma99 = cut(indicators.ma99)
+    const boll = indicators.boll
+      ? { upper: cut(indicators.boll.upper)!, mid: cut(indicators.boll.mid)!, lower: cut(indicators.boll.lower)! }
+      : null
+    const rsi = cut(indicators.rsi)
+    const macd = indicators.macd
+      ? { dif: cut(indicators.macd.dif)!, dea: cut(indicators.macd.dea)!, hist: cut(indicators.macd.hist)! }
+      : null
+    const kdj = indicators.kdj
+      ? { k: cut(indicators.kdj.k)!, d: cut(indicators.kdj.d)!, j: cut(indicators.kdj.j)! }
+      : null
+    // fib 起止索引平移到窗口局部坐标（锚点在窗口左侧之外时为负，绘制自画外伸入）
+    const fib = indicators.fib
+      ? { ...indicators.fib, startIndex: indicators.fib.startIndex - start, endIndex: indicators.fib.endIndex - start }
+      : null
 
     let pMin = Infinity
     let pMax = -Infinity
-    candles.forEach((c) => {
+    winCandles.forEach((c) => {
       pMin = Math.min(pMin, c.low)
       pMax = Math.max(pMax, c.high)
     })
@@ -439,10 +530,10 @@ export const CandleChart = memo(function CandleChart({ candles, renderMode, over
     pMin -= pad
     pMax += pad
 
-    const vMax = Math.max(...candles.map((c) => c.volume ?? 0), 1)
+    const vMax = Math.max(...winCandles.map((c) => c.volume ?? 0), 1)
 
     const innerW = w - PAD_L - PAD_R
-    const step = innerW / candles.length
+    const step = innerW / count
     const cw = Math.max(1, Math.min(14, step * 0.62))
     const x = (i: number) => PAD_L + (i + 0.5) * step
     const y = (v: number) => 6 + (1 - (v - pMin) / (pMax - pMin)) * (priceH - 12)
@@ -450,16 +541,20 @@ export const CandleChart = memo(function CandleChart({ candles, renderMode, over
 
     const priceTicks = Array.from({ length: 5 }, (_, i) => pMin + ((pMax - pMin) * i) / 4)
 
-    const timeTickCount = Math.min(7, candles.length)
+    const timeTickCount = Math.min(7, count)
     const timeTicks = Array.from({ length: timeTickCount }, (_, i) =>
-      Math.round((i * (candles.length - 1)) / (timeTickCount - 1))
+      Math.round((i * (count - 1)) / (timeTickCount - 1))
     ).filter((v, i, a) => a.indexOf(v) === i)
 
     return {
-      closes, ma7, ma25, ma99, boll, rsi, macd, kdj, fib,
+      ma7, ma25, ma99, boll, rsi, macd, kdj, fib,
       pMin, pMax, vMax, step, cw, x, y, vy, priceTicks, timeTicks,
     }
-  }, [candles, overlays, panes, w, priceH, volH, mainH])
+  }, [candles, indicators, win, w, priceH, volH, mainH])
+
+  /* 可见窗口K线切片：单独 memo 保证 hover 移动时 ChartLayers 的
+   * candles prop 引用不变（十字光标层独享重渲染，静态图层零开销） */
+  const winCandles = useMemo(() => candles.slice(win.start, win.start + win.count), [candles, win])
 
   /* 副图布局（只随副图开关变化，与 hover 无关） */
   const { subPanes, chartH } = useMemo(() => {
@@ -480,7 +575,7 @@ export const CandleChart = memo(function CandleChart({ candles, renderMode, over
     return { subPanes: list, chartH: Math.max(cursorTop - PANE_GAP, AXIS_H + mainH) }
   }, [panes, mainH])
 
-  /* 十字光标：鼠标移动 / 触屏拖动 / 键盘方向键共用一套定位；rAF 节流。
+  /* 十字光标：鼠标移动 / 触屏点按 / 键盘方向键共用一套定位；rAF 节流。
    * hoverRef 让键盘导航能读到当前十字线位置，而不必订阅 state 造成额外渲染 */
   const hoverRef = useRef<{ idx: number; x: number; y: number } | null>(null)
   const applyHover = useCallback((next: { idx: number; x: number; y: number } | null) => {
@@ -497,16 +592,97 @@ export const CandleChart = memo(function CandleChart({ candles, renderMode, over
         const rect = svg.getBoundingClientRect()
         const px = clientX - rect.left
         const py = clientY - rect.top
-        const idx = Math.max(0, Math.min(candles.length - 1, Math.round((px - PAD_L) / model.step - 0.5)))
+        // px → 全局索引：先折算窗口局部索引再 +start（缩放/平移后依旧准确）
+        const idx = Math.max(0, Math.min(len - 1, win.start + Math.round((px - PAD_L) / model.step - 0.5)))
         const prev = hoverRef.current
         if (prev && prev.idx === idx && Math.abs(prev.y - py) < 1) return
-        applyHover({ idx, x: model.x(idx), y: py })
+        applyHover({ idx, x: model.x(idx - win.start), y: py })
       })
     },
-    [model, candles.length, applyHover]
+    [model, len, win.start, applyHover]
   )
 
-  /* 键盘导航：←→ 单根、Shift+←→ 十根、Home/End 跳首尾、Esc 关闭十字线 */
+  /* 拖拽平移：按下记录锚点（clientX + 窗口起点），移动按 step 折算索引位移。
+   *  鼠标未按键 / 触屏未接触时回落为十字线定位；平移期间隐藏十字线，松手重新定位 */
+  const dragRef = useRef<{ x: number; start: number; id: number } | null>(null)
+
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent<SVGSVGElement>) => {
+      locate(e.currentTarget, e.clientX, e.clientY) // 点按即定位十字线（触屏读数）
+      if (e.pointerType === "mouse" && e.button !== 0) return
+      dragRef.current = { x: e.clientX, start: win.start, id: e.pointerId }
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId)
+      } catch {
+        /* 旧环境不支持指针捕获：拖出画布即停 */
+      }
+    },
+    [locate, win.start]
+  )
+
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent<SVGSVGElement>) => {
+      const drag = dragRef.current
+      const panning = drag != null && (e.pointerType !== "mouse" || e.buttons !== 0)
+      if (!panning || !model) {
+        locate(e.currentTarget, e.clientX, e.clientY)
+        return
+      }
+      const maxStart = Math.max(0, len - win.count)
+      const start = Math.max(0, Math.min(maxStart, Math.round(drag.start - (e.clientX - drag.x) / model.step)))
+      if (start !== win.start) setView((v) => ({ start, count: v?.count ?? len }))
+      applyHover(null)
+    },
+    [model, len, win.count, win.start, locate, applyHover]
+  )
+
+  const endDrag = useCallback(
+    (e: React.PointerEvent<SVGSVGElement>) => {
+      const wasDragging = dragRef.current != null
+      dragRef.current = null
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      } catch {
+        /* 未捕获时忽略 */
+      }
+      // 触屏抬手在落点保留十字线读数；鼠标交给随后的 hover 移动
+      if (wasDragging && e.pointerType !== "mouse") locate(e.currentTarget, e.clientX, e.clientY)
+    },
+    [locate]
+  )
+
+  /* 滚轮缩放：以光标为锚——缩放前后光标下的K线保持在原像素位置。
+   *  必须挂原生非被动监听才能 preventDefault 页面滚动（React onWheel 是被动的） */
+  useEffect(() => {
+    const svg = svgRef.current
+    if (!svg || !model) return
+    const handler = (e: WheelEvent) => {
+      const rect = svg.getBoundingClientRect()
+      const px = e.clientX - rect.left
+      // 光标下的全局浮点索引（当前窗口映射）
+      const gIdx = win.start + (px - PAD_L) / model.step - 0.5
+      const dy = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY
+      const count = Math.max(MIN_BARS, Math.min(len, Math.round(win.count * Math.exp(dy * 0.0015))))
+      if (count === win.count) return
+      e.preventDefault()
+      const stepNew = (w - PAD_L - PAD_R) / count
+      // 反解新 start 使 gIdx 仍映射到 px，并钳位到数据范围
+      const start = Math.max(0, Math.min(len - count, Math.round(gIdx - (px - PAD_L) / stepNew + 0.5)))
+      setView({ start, count })
+      // 十字线吸附到缩放后光标下的K线
+      const idx = Math.max(0, Math.min(len - 1, Math.round(gIdx)))
+      applyHover({ idx, x: PAD_L + (idx - start + 0.5) * stepNew, y: e.clientY - rect.top })
+    }
+    svg.addEventListener("wheel", handler, { passive: false })
+    return () => svg.removeEventListener("wheel", handler)
+  }, [model, win, len, w, applyHover])
+
+  /* 双击复位：回到全量视图 */
+  const resetView = useCallback(() => setView(null), [])
+  const zoomed = view != null && (win.count < len || win.start > 0)
+
+  /* 键盘导航：←→ 单根、Shift+←→ 十根、Home/End 跳首尾、Esc 关闭十字线；
+   *  走到窗口边缘自动平移窗口，十字线始终可见 */
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent<SVGSVGElement>) => {
       if (!model) return
@@ -514,20 +690,24 @@ export const CandleChart = memo(function CandleChart({ candles, renderMode, over
         applyHover(null)
         return
       }
-      const base = hoverRef.current?.idx ?? candles.length - 1
+      const base = hoverRef.current?.idx ?? len - 1
       let next: number | null = null
       if (e.key === "ArrowLeft") next = Math.max(0, base - (e.shiftKey ? 10 : 1))
-      else if (e.key === "ArrowRight") next = Math.min(candles.length - 1, base + (e.shiftKey ? 10 : 1))
+      else if (e.key === "ArrowRight") next = Math.min(len - 1, base + (e.shiftKey ? 10 : 1))
       else if (e.key === "Home") next = 0
-      else if (e.key === "End") next = candles.length - 1
+      else if (e.key === "End") next = len - 1
       if (next == null) return
       e.preventDefault()
-      applyHover({ idx: next, x: model.x(next), y: hoverRef.current?.y ?? model.y(candles[next].close) })
+      let start = win.start
+      if (next < start) start = Math.max(0, next)
+      else if (next >= start + win.count) start = Math.max(0, Math.min(len - win.count, next - win.count + 1))
+      if (start !== win.start) setView({ start, count: win.count })
+      applyHover({ idx: next, x: model.x(next - start), y: hoverRef.current?.y ?? model.y(candles[next].close) })
     },
-    [model, candles, applyHover]
+    [model, candles, len, win, applyHover]
   )
 
-  if (!model) {
+  if (!model || !indicators) {
     return (
       <div ref={wrapRef} className="flex h-72 items-center justify-center text-xs text-muted-foreground">
         {t("candle.insufficient")}
@@ -536,15 +716,19 @@ export const CandleChart = memo(function CandleChart({ candles, renderMode, over
   }
 
   // hover 索引可能越过当前K线边界（切范围/周期后数组变短），统一钳制
-  const hoverIdx = hover ? Math.max(0, Math.min(hover.idx, candles.length - 1)) : candles.length - 1
+  const hoverIdx = hover ? Math.max(0, Math.min(hover.idx, len - 1)) : len - 1
   const cur = candles[hoverIdx]
   const curChange = ((cur.close - cur.open) / cur.open) * 100
-  const crossX = hover ? model.x(hoverIdx) : 0
+  const crossX = hover ? model.x(hoverIdx - win.start) : 0
+  // 悬停K线的窗口局部索引：窗口外（数据更新后窗口移动）不绘制十字光标与高亮
+  const hoverLocal = hover ? hoverIdx - win.start : -1
+  const hoverVisible = hoverLocal >= 0 && hoverLocal < win.count
 
+  // 读数条取值走全量序列（窗口切片只影响绘制，不影响读数）
   const seriesAt = (s: (number | null)[] | null) => (s ? s[hoverIdx] : null)
 
   return (
-    <div ref={wrapRef} className="w-full select-none">
+    <div ref={wrapRef} className="relative w-full select-none">
       {/* 读数条：悬停/触选的K线时间打头 */}
       <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] leading-none">
         <span className="rounded bg-secondary px-1.5 py-1 font-semibold tabular text-foreground">
@@ -571,60 +755,64 @@ export const CandleChart = memo(function CandleChart({ candles, renderMode, over
             {t("candle.volume")} <span className="text-foreground">${fmtVol(cur.volume)}</span>
           </span>
         )}
-        {overlays.ma && (
+        {model.ma7 && (
           <span className="text-muted-foreground">
-            MA7<span className="ml-0.5" style={{ color: LINE1 }}>{seriesAt(model.ma7)?.toFixed(1) ?? "—"}</span>
+            MA7<span className="ml-0.5" style={{ color: LINE1 }}>{seriesAt(indicators.ma7)?.toFixed(1) ?? "—"}</span>
             <span className="mx-1.5" style={{ color: LINE2 }}>25</span>
-            <span style={{ color: LINE2 }}>{seriesAt(model.ma25)?.toFixed(1) ?? "—"}</span>
+            <span style={{ color: LINE2 }}>{seriesAt(indicators.ma25)?.toFixed(1) ?? "—"}</span>
             <span className="mx-1.5" style={{ color: LINE3 }}>99</span>
-            <span style={{ color: LINE3 }}>{seriesAt(model.ma99)?.toFixed(1) ?? "—"}</span>
+            <span style={{ color: LINE3 }}>{seriesAt(indicators.ma99)?.toFixed(1) ?? "—"}</span>
           </span>
         )}
         {model.boll && (
           <span className="text-muted-foreground">
-            BOLL {t("candle.boll.upper")}<span className="ml-0.5 text-foreground">{seriesAt(model.boll.upper)?.toFixed(1) ?? "—"}</span>
+            BOLL {t("candle.boll.upper")}<span className="ml-0.5 text-foreground">{seriesAt(indicators.boll!.upper)?.toFixed(1) ?? "—"}</span>
             <span className="mx-1.5">{t("candle.boll.mid")}</span>
-            <span className="text-foreground">{seriesAt(model.boll.mid)?.toFixed(1) ?? "—"}</span>
+            <span className="text-foreground">{seriesAt(indicators.boll!.mid)?.toFixed(1) ?? "—"}</span>
             <span className="mx-1.5">{t("candle.boll.lower")}</span>
-            <span className="text-foreground">{seriesAt(model.boll.lower)?.toFixed(1) ?? "—"}</span>
+            <span className="text-foreground">{seriesAt(indicators.boll!.lower)?.toFixed(1) ?? "—"}</span>
           </span>
         )}
         {model.rsi && (
           <span className="text-muted-foreground">
-            RSI <span className="text-foreground">{seriesAt(model.rsi)?.toFixed(1) ?? "—"}</span>
+            RSI <span className="text-foreground">{seriesAt(indicators.rsi)?.toFixed(1) ?? "—"}</span>
           </span>
         )}
         {model.macd && (
           <span className="text-muted-foreground">
-            DIF <span className="text-foreground">{seriesAt(model.macd.dif)?.toFixed(1) ?? "—"}</span>
+            DIF <span className="text-foreground">{seriesAt(indicators.macd!.dif)?.toFixed(1) ?? "—"}</span>
             <span className="mx-1.5">DEA</span>
-            <span className="text-foreground">{seriesAt(model.macd.dea)?.toFixed(1) ?? "—"}</span>
+            <span className="text-foreground">{seriesAt(indicators.macd!.dea)?.toFixed(1) ?? "—"}</span>
           </span>
         )}
         {model.kdj && (
           <span className="text-muted-foreground">
-            K <span className="text-foreground">{seriesAt(model.kdj.k)?.toFixed(1) ?? "—"}</span>
+            K <span className="text-foreground">{seriesAt(indicators.kdj!.k)?.toFixed(1) ?? "—"}</span>
             <span className="mx-1.5">D</span>
-            <span className="text-foreground">{seriesAt(model.kdj.d)?.toFixed(1) ?? "—"}</span>
+            <span className="text-foreground">{seriesAt(indicators.kdj!.d)?.toFixed(1) ?? "—"}</span>
             <span className="mx-1.5">J</span>
-            <span className="text-foreground">{seriesAt(model.kdj.j)?.toFixed(1) ?? "—"}</span>
+            <span className="text-foreground">{seriesAt(indicators.kdj!.j)?.toFixed(1) ?? "—"}</span>
           </span>
         )}
       </div>
 
       <svg
+        ref={svgRef}
         width={w}
         height={chartH}
         className="block max-w-full cursor-crosshair rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         style={{ touchAction: "pan-y" }}
-        onPointerDown={(e) => locate(e.currentTarget, e.clientX, e.clientY)}
-        onPointerMove={(e) => locate(e.currentTarget, e.clientX, e.clientY)}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
         onPointerLeave={(e) => {
           // 鼠标移出即隐藏；触屏抬手后保留十字线供读数，下次点按重新定位
-          if (e.pointerType === "mouse") applyHover(null)
+          if (e.pointerType === "mouse" && dragRef.current == null) applyHover(null)
         }}
-        onPointerCancel={(e) => {
-          if (e.pointerType === "mouse") applyHover(null)
+        onDoubleClick={(e) => {
+          e.preventDefault()
+          resetView()
         }}
         onKeyDown={onKeyDown}
         tabIndex={0}
@@ -632,7 +820,7 @@ export const CandleChart = memo(function CandleChart({ candles, renderMode, over
         aria-label={t("candle.aria")}
       >
         <ChartLayers
-          candles={candles}
+          candles={winCandles}
           model={model}
           renderMode={renderMode}
           w={w}
@@ -643,8 +831,37 @@ export const CandleChart = memo(function CandleChart({ candles, renderMode, over
         />
 
         {/* 十字光标（唯一随 hover 变化的图层） */}
-        {hover && (
+        {hover && hoverVisible && (
           <g pointerEvents="none">
+            {/* 悬停蜡烛微亮：up/down 10% 填充 + 同色描边（蜡烛模式） */}
+            {renderMode === "candles" ? (
+              (() => {
+                const up = cur.close >= cur.open
+                const color = up ? UP : DOWN
+                const yO = model.y(cur.open)
+                const yC = model.y(cur.close)
+                const top = Math.min(yO, yC)
+                const bodyH = Math.max(1, Math.abs(yC - yO))
+                const pad = Math.max(1.5, Math.min(3, model.cw * 0.25))
+                return (
+                  <rect
+                    aria-hidden
+                    x={model.x(hoverLocal) - model.cw / 2 - pad}
+                    y={top - pad}
+                    width={model.cw + pad * 2}
+                    height={bodyH + pad * 2}
+                    rx="2"
+                    fill={color}
+                    fillOpacity="0.1"
+                    stroke={color}
+                    strokeOpacity="0.8"
+                    strokeWidth="1"
+                  />
+                )
+              })()
+            ) : (
+              <circle aria-hidden cx={model.x(hoverLocal)} cy={model.y(cur.close)} r="3" fill="var(--primary)" stroke="var(--background)" strokeWidth="1" />
+            )}
             <line x1={crossX} x2={crossX} y1={4} y2={chartH - AXIS_H} stroke="var(--foreground)" strokeOpacity="0.4" strokeDasharray="3 3" />
             {hover.y > 6 && hover.y < mainH - 2 && (
               <line x1={PAD_L} x2={w - PAD_R} y1={hover.y} y2={hover.y} stroke="var(--foreground)" strokeOpacity="0.3" strokeDasharray="3 3" />
@@ -672,6 +889,18 @@ export const CandleChart = memo(function CandleChart({ candles, renderMode, over
           </g>
         )}
       </svg>
+
+      {/* 窗口复位：仅在缩放/平移过后出现（双击图表等效） */}
+      {zoomed && (
+        <button
+          onClick={resetView}
+          aria-label={t("candle.zoomReset")}
+          title={t("candle.zoomReset")}
+          className="absolute top-1.5 left-1.5 z-10 inline-flex size-6 items-center justify-center rounded-md border border-border bg-card/80 text-muted-foreground backdrop-blur-[1px] transition-colors hover:border-muted-foreground hover:text-foreground focus-visible:outline-ring focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:ring-[3px]"
+        >
+          <Maximize2 aria-hidden className="size-3.5" />
+        </button>
+      )}
     </div>
   )
 })

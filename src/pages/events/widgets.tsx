@@ -1,8 +1,9 @@
 /**
- * 事件日历小部件 — 分类徽标 / 影响度 / 倒计时 / 状态区 / 轨道节点。
+ * 事件日历小部件 — 分类徽标 / 影响度 / 倒计时 / 状态区 / 轨道节点 / 生长轨道。
  * 秒级跳动（倒计时、进度）由各组件内部 useNow 消化，不牵动整页重渲染。
  */
 
+import { useEffect, useRef, type RefObject } from "react"
 import { Bitcoin, Landmark } from "lucide-react"
 
 import { useNow } from "@/hooks/useNow"
@@ -151,5 +152,60 @@ export function NowDivider() {
       </span>
       <span className="h-px flex-1 bg-gradient-to-r from-primary/40 to-transparent" />
     </li>
+  )
+}
+
+/**
+ * 时间线生长轨道：灰色 hairline 全程打底，primary 竖线随滚动沿轨道生长 —
+ * 生长前沿停在视口中线，「已读过的轨道」即已着色，把时间进度翻译成阅读进度。
+ *
+ * 「滚动联动更新」类动效（brief 显式豁免）：JS 依 scroll 位置直接写元素高度，
+ * rAF 节流，不走 CSS transition —— 因此必须自带 matchMedia 短路：
+ * prefers-reduced-motion 下渲染静态全高线，不依赖 index.css 的全局 kill。
+ * 轨道节点（RailDot）盖线之上（DOM 顺序 + z-[1]），随线生长逐个被"经过"。
+ */
+export function TimelineRail({ containerRef }: { containerRef: RefObject<HTMLUListElement | null> }) {
+  const fillRef = useRef<HTMLSpanElement>(null)
+
+  useEffect(() => {
+    const fill = fillRef.current
+    const root = containerRef.current
+    if (!fill || !root) return
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      fill.style.height = "100%" // 静态终态：全高线
+      return
+    }
+
+    let raf = 0
+    const update = () => {
+      raf = 0
+      const rect = root.getBoundingClientRect()
+      // 前沿追踪视口中线：线长 = 容器顶部以上已滚过的轨道长度
+      const grown = Math.min(Math.max(window.innerHeight * 0.5 - rect.top, 0), rect.height)
+      fill.style.height = `${Math.round(grown)}px`
+    }
+    const schedule = () => {
+      if (!raf) raf = requestAnimationFrame(update)
+    }
+
+    update()
+    window.addEventListener("scroll", schedule, { passive: true })
+    window.addEventListener("resize", schedule)
+    // 展开详情 / 筛选增删行改变容器高度时重算前沿
+    const ro = new ResizeObserver(schedule)
+    ro.observe(root)
+    return () => {
+      window.removeEventListener("scroll", schedule)
+      window.removeEventListener("resize", schedule)
+      ro.disconnect()
+      if (raf) cancelAnimationFrame(raf)
+    }
+  }, [containerRef])
+
+  return (
+    <span aria-hidden className="absolute bottom-2 left-3 top-2 z-0 w-px bg-border/60">
+      <span ref={fillRef} className="absolute left-0 top-0 w-px bg-primary" style={{ height: 0 }} />
+    </span>
   )
 }

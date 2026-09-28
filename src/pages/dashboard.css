@@ -1,0 +1,68 @@
+/* =====================================================================
+ * 总览页局部动效（仅本页使用的挂载编排）。
+ *
+ * 基础层机制（index.css）已覆盖通用入场：route-fade（整页）、.stagger
+ * （卡内子元素阶差）、.reveal（滚动显现）、spark-draw（描线）。本文件只
+ * 补三类基础层没有的、总览页专属的一次性挂载编排：
+ *   1. 三档计数 pop 入场（SignalCard 看多/中性/看空计数）；
+ *   2. 底对齐柱条一次性生长（RegimeCard 牛熊柱）；
+ *   3. 图表补线延迟淡入（BtcChartCard MA200/面积/末点随描线推进现身）。
+ *
+ * 全部为一次性 keyframes（transform/opacity 白名单属性，位移 ≤10px、
+ * 缩放 ≤1），无循环；prefers-reduced-motion 由 index.css 末尾的全局
+ * kill（通配选择器 + !important）兜底，对本文件同样生效。
+ * ===================================================================== */
+
+/* 三档计数 pop：缩放 0.7 → 1 + fade，60ms/步阶差；
+ * --pop-delay 为组内首项的起始延迟（等待卡面主角元素先入场） */
+@keyframes count-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.count-pop {
+  animation: count-pop 0.35s var(--ease-soft) both;
+  animation-delay: calc(var(--pop-delay, 0ms) + var(--i, 0) * 60ms);
+}
+
+/* 底对齐柱条一次性生长：scaleY 0 → 1，45ms/列波浪推进 */
+@keyframes bar-grow {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.bar-grow {
+  transform-origin: bottom;
+  animation: bar-grow 0.45s var(--ease-soft) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+
+/* 延迟淡入：主线描线（spark-draw 900ms）推进到位后，补线/末点随后现身 */
+@keyframes late-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+/* 面积随描线起点先铺开（弱化起步突兀感） */
+.area-fade {
+  animation: late-fade 0.6s var(--ease-soft) 0.15s both;
+}
+/* MA200 虚线在描线后半程淡入（约 650ms 处，与主线收尾衔接） */
+.ma-fade {
+  animation: late-fade 0.45s var(--ease-soft) 0.65s both;
+}
+/* 末点标记在描线完成时现身（900ms 处） */
+.dot-fade {
+  animation: late-fade 0.35s var(--ease-soft) 0.9s both;
+}

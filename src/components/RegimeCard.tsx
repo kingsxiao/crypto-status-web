@@ -1,4 +1,4 @@
-import { memo } from "react"
+import { memo, useEffect, useState, type CSSProperties } from "react"
 import { TrendingUp } from "lucide-react"
 
 import { Card, CardContent, CardHeader, CardKicker } from "@/components/ui/card"
@@ -14,6 +14,14 @@ export const RegimeCard = memo(function RegimeCard({ analysis }: { analysis: Ana
 
   const isBull = regime.state === "bull" || regime.state === "recovering"
   const regimeMeta = REGIME_KEY[regime.state]
+
+  // 挂载一次性编排：牛熊柱 scaleY 生长、两条 Progress 从中性位（50）推进到目标。
+  // mounted 翻转走 useEffect（与基础层 Gauge 同款时序）：首帧呈现初值，次帧起过渡
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+
+  const priceVal = Math.min(100, Math.max(0, 50 + regime.priceVsMa200))
+  const maVal = Math.min(100, Math.max(0, 50 + regime.ma50VsMa200 * 2.5))
 
   return (
     <Card className="h-full">
@@ -33,11 +41,13 @@ export const RegimeCard = memo(function RegimeCard({ analysis }: { analysis: Ana
               <span className={`size-2.5 rounded-full ${isBull ? "bg-up" : "bg-down"}`} />
               <span className="text-4xl font-bold tracking-wide">{t(regimeMeta.label)}</span>
             </div>
-            <div className="mt-1.5 font-mono text-xs text-muted-foreground">
-              {t("rg.daysPre")} <span className="font-semibold text-foreground">{regime.days}</span> {t("rg.daysPost")}
+            <div className="type-meta mt-1.5">
+              {t("rg.daysPre")} <span className="type-num text-foreground">{regime.days}</span> {t("rg.daysPost")}
             </div>
           </div>
-          {/* 牛熊示意图：右半绿（牛）左半红（熊）；纯装饰，窄屏让位给状态大字 */}
+          {/* 牛熊示意图：右半绿（牛）左半红（熊）；纯装饰，窄屏让位给状态大字。
+              挂载时自底向上生长（.bar-grow，45ms/列波浪）；此后牛熊切换由
+              height/opacity 过渡承担（450ms 状态切换档） */}
           <div className="hidden h-16 items-end gap-1.5 sm:flex" aria-hidden>
             {Array.from({ length: 9 }).map((_, i) => {
               const bullSide = i >= 4
@@ -45,10 +55,10 @@ export const RegimeCard = memo(function RegimeCard({ analysis }: { analysis: Ana
               return (
                 <div
                   key={i}
-                  className={`w-2.5 rounded-sm transition-all ${
+                  className={`bar-grow w-2.5 rounded-sm transition-[height,opacity] duration-[450ms] ease-[cubic-bezier(0.21,1,0.33,1)] ${
                     bullSide ? "bg-up" : "bg-down"
                   }`}
-                  style={{ height: isBull ? h : 62 - h + 14, opacity: isBull === bullSide ? 1 : 0.35 }}
+                  style={{ height: isBull ? h : 62 - h + 14, opacity: isBull === bullSide ? 1 : 0.35, "--i": i } as CSSProperties}
                 />
               )
             })}
@@ -61,13 +71,13 @@ export const RegimeCard = memo(function RegimeCard({ analysis }: { analysis: Ana
           <div className="space-y-1.5">
             <div className="flex justify-between text-xs">
               <span className="text-muted-foreground">{t("rg.priceVsMa")}</span>
-              <span className={`font-mono tabular ${regime.priceVsMa200 >= 0 ? "text-up" : "text-down"}`}>
+              <span className={`type-num ${regime.priceVsMa200 >= 0 ? "text-up" : "text-down"}`}>
                 {regime.priceVsMa200 >= 0 ? "+" : ""}
                 {regime.priceVsMa200.toFixed(1)}%
               </span>
             </div>
             <Progress
-              value={Math.min(100, Math.max(0, 50 + regime.priceVsMa200))}
+              value={mounted ? priceVal : 50}
               aria-label={t("rg.priceMaAria")}
               indicatorClassName={regime.priceVsMa200 >= 0 ? "bg-up" : "bg-down"}
             />
@@ -75,13 +85,13 @@ export const RegimeCard = memo(function RegimeCard({ analysis }: { analysis: Ana
           <div className="space-y-1.5">
             <div className="flex justify-between text-xs">
               <span className="text-muted-foreground">{t("rg.maVsMa")}</span>
-              <span className={`font-mono tabular ${regime.ma50VsMa200 >= 0 ? "text-up" : "text-down"}`}>
+              <span className={`type-num ${regime.ma50VsMa200 >= 0 ? "text-up" : "text-down"}`}>
                 {regime.ma50VsMa200 >= 0 ? "+" : ""}
                 {regime.ma50VsMa200.toFixed(1)}%
               </span>
             </div>
             <Progress
-              value={Math.min(100, Math.max(0, 50 + regime.ma50VsMa200 * 2.5))}
+              value={mounted ? maVal : 50}
               aria-label={t("rg.maAria")}
               indicatorClassName={regime.ma50VsMa200 >= 0 ? "bg-up" : "bg-down"}
             />
@@ -89,18 +99,18 @@ export const RegimeCard = memo(function RegimeCard({ analysis }: { analysis: Ana
 
           <div className="grid grid-cols-3 gap-2 border-t pt-3 text-center">
             <div>
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("rg.btcPrice")}</div>
-              <div className="font-mono text-[13px] font-semibold tabular">${formatPrice(btc.price)}</div>
+              <div className="type-label text-muted-foreground">{t("rg.btcPrice")}</div>
+              <div className="type-num mt-1 text-[13px]">${formatPrice(btc.price)}</div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">MA50</div>
-              <div className="font-mono text-[13px] font-semibold tabular text-muted-foreground">
+              <div className="type-label text-muted-foreground">MA50</div>
+              <div className="type-num mt-1 text-[13px] text-muted-foreground">
                 {btc.ma50 ? `$${formatPrice(btc.ma50)}` : "—"}
               </div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">MA200</div>
-              <div className="font-mono text-[13px] font-semibold tabular text-muted-foreground">
+              <div className="type-label text-muted-foreground">MA200</div>
+              <div className="type-num mt-1 text-[13px] text-muted-foreground">
                 {btc.ma200 ? `$${formatPrice(btc.ma200)}` : "—"}
               </div>
             </div>

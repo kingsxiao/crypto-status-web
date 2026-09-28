@@ -2,10 +2,13 @@ import { useCallback, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import { RotateCw, TriangleAlert } from "lucide-react"
 
+import "./dashboard.css"
+
 import { BtcChartCard } from "@/components/BtcChartCard"
 import { IndicatorBreakdown } from "@/components/IndicatorBreakdown"
 import { MarketOverview } from "@/components/MarketOverview"
 import { PageHeader } from "@/components/layout/PageHeader"
+import { SectionLabel } from "@/components/layout/SectionLabel"
 import { PricesTable } from "@/components/PricesTable"
 import { RegimeCard } from "@/components/RegimeCard"
 import { SentimentCard } from "@/components/SentimentCard"
@@ -26,18 +29,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useMarket, useLive } from "@/context/MarketDataContext"
 import { t, useT } from "@/i18n"
 import { usePageMeta } from "@/hooks/usePageMeta"
+import { useReveal } from "@/hooks/useReveal"
 import type { Coin } from "@/lib/api"
-
-function SectionLabel({ children }: { children: string }) {
-  return (
-    <div className="flex items-center gap-3">
-      <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.25em] text-muted-foreground">
-        {children}
-      </span>
-      <div className="h-px flex-1 bg-border" />
-    </div>
-  )
-}
 
 function DashboardSkeleton() {
   return (
@@ -147,6 +140,10 @@ export function DashboardPage() {
   const { snapshot, error, loading, refresh, patchedChart, analysis } = useMarket()
   const tickers = useLive()
   const navigate = useNavigate()
+  // 滚动显现：折线图 / 价格表两段（首屏之下的内容）进视口时淡入；
+  // 入场编排契约 —— 整页入场由 App 层 route-fade 承担（首屏容器不再挂
+  // fade-up），滚动内容用 .reveal，卡内专属编排见各卡片组件
+  const mainRef = useReveal<HTMLElement>()
 
   const chart = useMemo(() => patchedChart ?? snapshot?.btcChart ?? null, [patchedChart, snapshot])
   const onCoinSelect = useCallback((c: Coin) => navigate(`/coin/${c.id}`), [navigate])
@@ -173,7 +170,7 @@ export function DashboardPage() {
   if (!snapshot) return null
 
   return (
-    <main className="mx-auto w-full max-w-7xl flex-1 2xl:max-w-[1680px] 2xl:px-10 space-y-6 px-4 pb-20 pt-6 sm:px-6">
+    <main ref={mainRef} className="mx-auto w-full max-w-7xl flex-1 2xl:max-w-[1680px] 2xl:px-10 space-y-6 px-4 pb-20 pt-6 sm:px-6">
       <PageHeader
         en="Dashboard"
         title={t("page.dashboard.title")}
@@ -181,8 +178,8 @@ export function DashboardPage() {
       />
 
       {/* 第一屏：信号 / 牛熊 / 情绪（lg~xl 三卡均分放得下英文长标题，xl 起恢复 5/4/3 主次） */}
-      <section className="fade-up grid gap-4 lg:grid-cols-12">
-        <div className="fade-up lg:col-span-4 xl:col-span-5">
+      <section className="grid gap-4 lg:grid-cols-12">
+        <div className="lg:col-span-4 xl:col-span-5">
           {analysis ? (
             <SignalCard analysis={analysis} />
           ) : (
@@ -196,7 +193,7 @@ export function DashboardPage() {
             </Card>
           )}
         </div>
-        <div className="fade-up lg:col-span-4" style={{ animationDelay: "60ms" }}>
+        <div className="lg:col-span-4">
           {analysis ? (
             <RegimeCard analysis={analysis} />
           ) : (
@@ -205,24 +202,24 @@ export function DashboardPage() {
             </Card>
           )}
         </div>
-        <div className="fade-up lg:col-span-4 xl:col-span-3" style={{ animationDelay: "120ms" }}>
+        <div className="lg:col-span-4 xl:col-span-3">
           <SentimentCard fng={snapshot.fng} />
         </div>
       </section>
 
       {/* 全球市场概览 */}
-      <section className="fade-up" style={{ animationDelay: "160ms" }}>
+      <section>
         <MarketOverview global={snapshot.global} />
       </section>
 
       {/* BTC 走势 */}
-      <section className="fade-up space-y-3" style={{ animationDelay: "200ms" }}>
+      <section data-reveal className="space-y-3">
         <SectionLabel>{t("dash.section.structure")}</SectionLabel>
         {chart && <BtcChartCard chart={chart} analysis={analysis} />}
       </section>
 
       {/* 实时价格 */}
-      <section className="fade-up space-y-3" style={{ animationDelay: "240ms" }}>
+      <section data-reveal className="space-y-3">
         <SectionLabel>{t("dash.section.live")}</SectionLabel>
         <PricesTable
           coins={snapshot.coins}
@@ -231,9 +228,9 @@ export function DashboardPage() {
         />
       </section>
 
-      {/* 指标明细 */}
+      {/* 指标明细：行内 .stagger 阶差承担入场（与滚动 reveal 二选一，不叠加） */}
       {analysis && (
-        <section className="fade-up space-y-3" style={{ animationDelay: "280ms" }}>
+        <section className="space-y-3">
           <SectionLabel>{t("dash.section.signal")}</SectionLabel>
           <IndicatorBreakdown analysis={analysis} />
         </section>

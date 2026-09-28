@@ -1,15 +1,19 @@
-import { useMemo } from "react"
+import { useLayoutEffect, useMemo, useRef, useState } from "react"
 import { Link } from "react-router-dom"
 import { ArrowDownRight, ArrowUpRight, Crosshair, Gauge, Minus } from "lucide-react"
 
 import { CompositeBar, OpinionRow, OpinionSummary } from "@/components/OpinionBoard"
 import { PageHeader } from "@/components/layout/PageHeader"
+import { SectionLabel } from "@/components/layout/SectionLabel"
 import { ChartSkeleton, SkeletonCard, SkHeader, SkPageHeader } from "@/components/loading"
+import { AnimatedNumber } from "@/components/ui/animated-number"
 import { Card, CardContent, CardHead, CardHeader, CardKicker } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useLive, useMarket } from "@/context/MarketDataContext"
 import { dateLocale, t, useLocale, useT, type MessageKey } from "@/i18n"
 import { usePageMeta } from "@/hooks/usePageMeta"
+import { useReveal } from "@/hooks/useReveal"
 import { STABLECOIN_IDS } from "@/lib/api"
 import { compositeOf, verdictOfComposite, verdictOfScore, VERDICT_LEVEL_KEY } from "@/lib/coinAnalysis"
 import { FNG_GRADIENT, fngLabel, fngShade } from "@/lib/fng"
@@ -22,6 +26,39 @@ function useFmtDate() {
     new Date(tsSec * 1000).toLocaleDateString(dateLocale(locale), { month: "2-digit", day: "2-digit" })
 }
 
+/**
+ * 视口触发的生长开关：进入视口后置 true，驱动 .w-anim / scaleY 条形从零
+ * 生长到目标宽度（reduced-motion / 无 IntersectionObserver 时短路为终态）。
+ * 本页分布在折叠线以下，挂载即播会错过观赏窗口，故以可见性触发。
+ */
+function useGrowIn<T extends HTMLElement>() {
+  const ref = useRef<T>(null)
+  const [grown, setGrown] = useState(false)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    if (
+      typeof IntersectionObserver === "undefined" ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      setGrown(true)
+      return
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setGrown(true)
+          io.disconnect()
+        }
+      },
+      { rootMargin: "0px 0px -10% 0px" },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
+  return [ref, grown] as const
+}
+
 export function SentimentPage() {
   useT()
   const fmtDate = useFmtDate()
@@ -30,6 +67,10 @@ export function SentimentPage() {
   const tickers = useLive()
   const fng = useMemo(() => snapshot?.fng ?? [], [snapshot])
   const coins = useMemo(() => snapshot?.coins ?? [], [snapshot])
+  // 折叠线以下的 30 日走势 / 分布卡：section 级滚动显现（首屏由 route-fade 承担）
+  const pageReveal = useReveal<HTMLElement>("[data-page-reveal]")
+  const [historyRef, historyGrown] = useGrowIn<HTMLDivElement>()
+  const [distRef, distGrown] = useGrowIn<HTMLDivElement>()
 
   const history = useMemo(() => [...fng].reverse(), [fng]) // 升序，末尾为今天
 
@@ -173,7 +214,7 @@ export function SentimentPage() {
 
   if (loading && !snapshot) {
     return (
-      <main className="mx-auto w-full max-w-7xl flex-1 2xl:max-w-[1680px] 2xl:px-10 space-y-4 px-4 pb-20 pt-6 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl flex-1 2xl:max-w-[1680px] 2xl:px-10 space-y-6 px-4 pb-20 pt-6 sm:px-6">
         <SkPageHeader title="w-40" desc="w-64" />
 
         {/* 当前指数 + 关键点位 */}
@@ -238,7 +279,7 @@ export function SentimentPage() {
     return (
       <span
         className={cn(
-          "inline-flex items-center gap-0.5 font-mono text-xs",
+          "type-num inline-flex items-center gap-0.5 text-xs",
           d > 0 ? "text-up" : d < 0 ? "text-down" : "text-muted-foreground"
         )}
       >
@@ -255,15 +296,18 @@ export function SentimentPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-7xl flex-1 2xl:max-w-[1680px] 2xl:px-10 space-y-4 px-4 pb-20 pt-6 sm:px-6">
+    <main
+      ref={pageReveal}
+      className="mx-auto w-full max-w-7xl flex-1 2xl:max-w-[1680px] 2xl:px-10 space-y-6 px-4 pb-20 pt-6 sm:px-6"
+    >
       <PageHeader
         en="Sentiment"
         title={t("page.sentiment.title")}
         description={t("page.sentiment.desc")}
       />
 
-      {/* 当前指数 + 关键点位 */}
-      <section className="fade-up grid gap-4 lg:grid-cols-12" style={{ animationDelay: "60ms" }}>
+      {/* 当前指数 + 关键点位（整页入场由 route-fade 承担，卡内子元素 .stagger） */}
+      <section className="grid gap-4 lg:grid-cols-12">
         <Card className="lg:col-span-5">
           <CardHeader>
             <CardKicker
@@ -273,14 +317,18 @@ export function SentimentPage() {
               desc={`${fmtDate(stats.now.timestamp)} · alternative.me`}
             />
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-end gap-4">
-              <span className="font-mono text-7xl leading-none font-bold tabular">
-                {String(stats.now.value).padStart(2, "0")}
-              </span>
-              <div className="flex flex-col gap-1 pb-1">
+          <CardContent className="stagger space-y-4">
+            <div className="flex items-end gap-3">
+              {/* hero 读数：全站唯一常驻 .type-display —— text-7xl 类是 e2e 锚点，不得移除；
+                  format 保留 padStart 前导零（个位数日 "05" 形态） */}
+              <AnimatedNumber
+                className="type-display text-7xl leading-none"
+                value={stats.now.value}
+                format={(v) => String(v).padStart(2, "0")}
+              />
+              <div className="flex flex-col gap-1 pb-1.5">
                 <span className="text-base font-semibold">{fngLabel(stats.now.classification)}</span>
-                <span className="font-mono text-[10px] text-muted-foreground">/ 100</span>
+                <span className="type-label text-muted-foreground">/ 100</span>
               </div>
             </div>
             <div className="relative h-3 w-full overflow-hidden rounded-full bg-secondary">
@@ -289,11 +337,11 @@ export function SentimentPage() {
                 style={{ background: FNG_GRADIENT, opacity: 0.9 }}
               />
               <div
-                className="absolute inset-y-0 w-[3px] rounded-full bg-popover"
+                className="absolute inset-y-0 w-[3px] rounded-full bg-popover transition-[left] duration-700 ease-[cubic-bezier(0.21,1,0.33,1)]"
                 style={{ left: `calc(${stats.now.value}% - 1.5px)` }}
               />
             </div>
-            <div className="flex justify-between font-mono text-[10px] text-muted-foreground">
+            <div className="type-label flex justify-between pb-1 text-muted-foreground">
               <span>{t("sentiment.scale0")}</span>
               <span>{t("sentiment.scale50")}</span>
               <span>{t("sentiment.scale100")}</span>
@@ -305,7 +353,7 @@ export function SentimentPage() {
           <CardHeader>
             <CardKicker icon={Crosshair} title={t("sentiment.keyLevels")} en="KEY LEVELS" desc={t("sentiment.keyLevelsDesc")} />
           </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <CardContent className="stagger grid grid-cols-2 gap-4 sm:grid-cols-3">
             {[
               { label: t("sentiment.yesterday"), entry: stats.yesterday },
               { label: t("sentiment.weekAgo"), entry: stats.weekAgo },
@@ -313,22 +361,24 @@ export function SentimentPage() {
             ].map(({ label, entry }) => (
               <div key={label} className="rounded-lg border border-border/60 p-3">
                 <div className="flex items-baseline justify-between">
-                  <span className="text-[10px] tracking-wider text-muted-foreground uppercase">{label}</span>
+                  <span className="type-label text-muted-foreground">{label}</span>
                   {delta(stats.now.value, entry.value)}
                 </div>
-                <div className="mt-1.5 font-mono text-2xl font-bold tabular">{entry.value}</div>
+                <div className="mt-1.5">
+                  <AnimatedNumber className="type-num text-2xl font-bold" value={entry.value} />
+                </div>
                 <div className="mt-0.5 text-[10px] text-muted-foreground">{fngLabel(entry.classification)}</div>
               </div>
             ))}
             <div className="rounded-lg border border-border/60 p-3">
-              <span className="text-[10px] tracking-wider text-muted-foreground uppercase">{t("sentiment.avg30")}</span>
-              <div className="mt-1.5 font-mono text-2xl font-bold tabular">{stats.avg}</div>
-              <div className="mt-0.5 text-[10px] text-muted-foreground">
-                {t("sentiment.range", { min: stats.min, max: stats.max })}
+              <span className="type-label text-muted-foreground">{t("sentiment.avg30")}</span>
+              <div className="mt-1.5">
+                <AnimatedNumber className="type-num text-2xl font-bold" value={stats.avg} />
               </div>
+              <div className="type-meta mt-0.5">{t("sentiment.range", { min: stats.min, max: stats.max })}</div>
             </div>
             <div className="col-span-2 rounded-lg border border-border/60 p-3 sm:col-span-2">
-              <span className="text-[10px] tracking-wider text-muted-foreground uppercase">{t("sentiment.reading")}</span>
+              <span className="type-label text-muted-foreground">{t("sentiment.reading")}</span>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                 {stats.now.value >= 75
                   ? t("sentiment.interp1")
@@ -347,13 +397,8 @@ export function SentimentPage() {
 
       {/* 多空情绪总览：三维综合判断 */}
       {synthesis.total !== null && (
-        <section className="fade-up space-y-3" style={{ animationDelay: "100ms" }}>
-          <div className="flex items-center gap-3">
-            <span className="font-mono text-[10px] font-semibold tracking-[0.25em] text-muted-foreground uppercase">
-              {t("sentiment.synthesisLabel")}
-            </span>
-            <div className="h-px flex-1 bg-border" />
-          </div>
+        <section className="space-y-3">
+          <SectionLabel>{t("sentiment.synthesisLabel")}</SectionLabel>
 
           <Card>
             <CardContent className="py-5">
@@ -400,11 +445,11 @@ export function SentimentPage() {
                   {dim.comp !== null && (
                     <div className="mb-3 space-y-1.5">
                       <div className="flex items-baseline justify-between">
-                        <span className={cn("font-mono text-sm font-bold tabular", dim.comp >= 15 ? "text-up" : dim.comp <= -15 ? "text-down" : "text-muted-foreground")}>
+                        <span className={cn("type-num text-sm font-bold", dim.comp >= 15 ? "text-up" : dim.comp <= -15 ? "text-down" : "text-muted-foreground")}>
                           {dim.comp > 0 ? "+" : ""}
                           {dim.comp}
                         </span>
-                        <span className="font-mono text-[10px] text-muted-foreground">
+                        <span className="type-label text-muted-foreground">
                           {t(VERDICT_LEVEL_KEY[verdictOfComposite(dim.comp).level])}
                         </span>
                       </div>
@@ -425,52 +470,69 @@ export function SentimentPage() {
         </section>
       )}
 
-      {/* 30 日历史 */}
-      <Card className="fade-up" style={{ animationDelay: "120ms" }}>
+      {/* 30 日历史（滚动显现；柱体进入视口后自左向右生长，hover 聚焦当前柱） */}
+      <Card data-page-reveal>
         <CardHeader>
           <CardHead title={t("common.trend30")} desc={t("sentiment.historyDesc")} />
         </CardHeader>
         <CardContent>
-          <div className="flex h-56 items-end gap-1.5">
+          <div
+            ref={historyRef}
+            className="group/bars flex h-56 items-end gap-1.5"
+            role="img"
+            aria-label={`${t("common.trend30")} · ${t("sentiment.range", { min: stats.min, max: stats.max })}`}
+          >
             {history.slice(-30).map((e, i, arr) => (
-              <div
-                key={e.timestamp}
-                className="group relative flex-1"
-                title={`${fmtDate(e.timestamp)} · ${e.value} ${fngLabel(e.classification)}`}
-              >
-                <div
-                  className="w-full rounded-t-[3px] transition-opacity group-hover:opacity-80"
-                  style={{ height: `${Math.max(6, (e.value / 100) * 200)}px`, background: fngShade(e.value) }}
-                />
-                {i === arr.length - 1 && (
-                  <span className="absolute -top-5 left-1/2 -translate-x-1/2 font-mono text-[10px] font-bold">
-                    {e.value}
-                  </span>
-                )}
-              </div>
+              <Tooltip key={e.timestamp}>
+                <TooltipTrigger asChild>
+                  {/* 纯 CSS 联动：容器 hover 时邻柱降透明，悬停柱经更高优先级变体回到全亮 */}
+                  <div
+                    aria-hidden
+                    className="relative flex-1 transition-opacity duration-150 group-hover/bars:opacity-40 group-hover/bars:hover:opacity-100"
+                  >
+                    <div
+                      className="w-full origin-bottom rounded-t-[3px] transition-transform duration-700 ease-[cubic-bezier(0.21,1,0.33,1)]"
+                      style={{
+                        height: `${Math.max(6, (e.value / 100) * 200)}px`,
+                        background: fngShade(e.value),
+                        transform: historyGrown ? "scaleY(1)" : "scaleY(0)",
+                        transitionDelay: `${Math.min(i * 25, 500)}ms`,
+                      }}
+                    />
+                    {i === arr.length - 1 && (
+                      <span className="type-num absolute -top-5 left-1/2 -translate-x-1/2 text-[10px]">
+                        {e.value}
+                      </span>
+                    )}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {fmtDate(e.timestamp)} · {e.value} {fngLabel(e.classification)}
+                </TooltipContent>
+              </Tooltip>
             ))}
           </div>
-          <div className="mt-2 flex justify-between font-mono text-[10px] text-muted-foreground">
+          <div className="type-label mt-2 flex justify-between text-muted-foreground">
             <span>{history.length > 30 ? fmtDate(history[history.length - 30].timestamp) : fmtDate(history[0].timestamp)}</span>
             <span>{t("common.today")}</span>
           </div>
         </CardContent>
       </Card>
 
-      {/* 分布 */}
-      <Card className="fade-up" style={{ animationDelay: "180ms" }}>
+      {/* 分布（滚动显现；占比条进入视口后 width 生长 700ms） */}
+      <Card data-page-reveal>
         <CardHeader>
           <CardHead title={t("sentiment.distTitle")} desc={t("sentiment.distDesc")} />
         </CardHeader>
-        <CardContent className="space-y-2.5">
+        <CardContent className="space-y-2.5" ref={distRef}>
           {dist.map((b) => (
             <div key={b.key} className="flex items-center gap-3">
               <span className="w-16 shrink-0 text-right text-xs text-muted-foreground">{t(b.label)}</span>
               <div className="h-6 flex-1 overflow-hidden rounded bg-secondary">
                 <div
-                  className="flex h-full items-center justify-end rounded px-2 font-mono text-[10px] font-semibold transition-[width] duration-500"
+                  className="type-num w-anim flex h-full items-center justify-end rounded px-2 text-[10px]"
                   style={{
-                    width: `${Math.max(b.days ? 8 : 0, (b.days / Math.max(1, fng.length)) * 100)}%`,
+                    width: `${distGrown ? Math.max(b.days ? 8 : 0, (b.days / Math.max(1, fng.length)) * 100) : 0}%`,
                     background: fngShade((b.range[0] + b.range[1]) / 2),
                     color: (b.range[0] + b.range[1]) / 2 >= 50 ? "var(--foreground)" : "var(--background)",
                   }}
@@ -478,7 +540,7 @@ export function SentimentPage() {
                   {b.days > 0 && t("sentiment.daysCount", { n: b.days })}
                 </div>
               </div>
-              <span className="w-14 shrink-0 font-mono text-[10px] text-muted-foreground">
+              <span className="type-num w-14 shrink-0 text-[10px] text-muted-foreground">
                 {b.range[0]}–{b.range[1]}
               </span>
             </div>

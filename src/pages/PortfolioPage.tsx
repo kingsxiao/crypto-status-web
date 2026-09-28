@@ -1,10 +1,25 @@
-import { useMemo, useState } from "react"
-import { Coins, Pencil, Plus, ShieldCheck, Trash2, Wallet } from "lucide-react"
+import { useCallback, useMemo, useRef, useState } from "react"
+import {
+  Activity,
+  Coins,
+  Download,
+  Pencil,
+  PieChart,
+  Plus,
+  Scale,
+  ShieldCheck,
+  Trash2,
+  Upload,
+  Wallet,
+} from "lucide-react"
 
 import { PageHeader } from "@/components/layout/PageHeader"
 import { LivePrice, Pct } from "@/components/price-cells"
+import { AnimatedNumber } from "@/components/ui/animated-number"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHead, CardHeader } from "@/components/ui/card"
+import { StatStrip, type StatItem } from "@/components/ui/stat"
+import { pushToast } from "@/components/ui/toast"
 import { SkeletonCard, SkPageHeader, StatStripSkeleton, TableSkeleton } from "@/components/loading"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -27,6 +42,7 @@ import { cn } from "@/lib/utils"
 
 import { AllocDonut } from "./portfolio/AllocDonut"
 import { ALLOC_COLORS } from "./portfolio/colors"
+import { exportHoldingsCsv, parseHoldingsCsv } from "./portfolio/csv"
 import { HoldingForm, type FormState } from "./portfolio/HoldingForm"
 
 /* ------------------------------ 视图模型 ------------------------------ */
@@ -41,7 +57,7 @@ interface Row {
   pnlPct: number | null
 }
 
-/** 盈亏金额格式化：接近零时避免 formatPrice 的 6 位小数展开 */
+/** 盈亏金额格式化:接近零时避免 formatPrice 的 6 位小数展开 */
 function formatPnlAbs(v: number): string {
   return Math.abs(v) < 0.01 ? "0.00" : formatPrice(Math.abs(v))
 }
@@ -56,14 +72,17 @@ export function PortfolioPage() {
   const { holdings, upsert, remove, clear } = usePortfolio()
 
   const [form, setForm] = useState<FormState>({ mode: "closed" })
-  // 两个二次确认各自独立实例：共用一个的话，先武装的一方会把另一方
-  // 的自动复位 timer 清掉，导致破坏性确认永久停留在武装态
+  // 配置图联动:悬停的分段 key(null = 显示组合整体)
+  const [focusKey, setFocusKey] = useState<string | null>(null)
+  // 两个二次确认各自独立实例:共用一个的话,先武装的一方会把另一方
+  // 的自动复位 timer 清掉,导致破坏性确认永久停留在武装态
   const deleteConfirm = useTwoStepConfirm<string>()
   const clearConfirm = useTwoStepConfirm<true>()
+  const csvRef = useRef<HTMLInputElement>(null)
 
   const coins = useMemo(() => snapshot?.coins ?? [], [snapshot])
 
-  /** coinId → 价格引用（实时优先，回退快照） */
+  /** coinId → 价格引用(实时优先,回退快照) */
   const prices = useMemo(() => {
     const map: Record<string, PriceRef> = {}
     for (const c of coins) {
@@ -78,7 +97,7 @@ export function PortfolioPage() {
 
   const stats = useMemo(() => computeStats(holdings, prices), [holdings, prices])
 
-  /** 行视图：有价格在前、按市值降序；无价格行垫底 */
+  /** 行视图:有价格在前、按市值降序;无价格行垫底 */
   const rows = useMemo<Row[]>(() => {
     const list = holdings.map((h): Row => {
       const coin = coins.find((c) => c.id === h.id)
@@ -115,10 +134,13 @@ export function PortfolioPage() {
       }))
   }, [rows])
 
-  /** 环图分段：从 alloc 派生的稳定引用，秒级行情推送不触发 memo 化 AllocDonut 重算 */
+  /** 环图分段:从 alloc 派生的稳定引用,秒级行情推送不触发 memo 化 AllocDonut 重算 */
   const slices = useMemo(() => alloc.map((a) => ({ key: a.key, pct: a.pct, color: a.color })), [alloc])
 
   const top = alloc[0]
+  /** 悬停联动读数:图例/分段指向的资产(undefined = 组合整体) */
+  const focusAlloc = focusKey != null ? alloc.find((a) => a.key === focusKey) : undefined
+  const handleSliceHover = useCallback((k: string | null) => setFocusKey(k), [])
 
   const openAdd = (coinId?: string) =>
     setForm({ mode: "add", coinId: coinId ?? coins[0]?.id ?? "bitcoin", amount: "", cost: "" })
@@ -129,6 +151,27 @@ export function PortfolioPage() {
     const cost = form.cost.trim() === "" ? null : parseNum(form.cost)
     upsert({ id: form.coinId, amount, cost: cost ?? null, addedAt: Date.now() })
     setForm({ mode: "closed" })
+  }
+
+  const onExportCsv = () => {
+    exportHoldingsCsv(holdings, (id) =>
+      (coins.find((c) => c.id === id)?.symbol ?? id).toUpperCase()
+    )
+  }
+
+  const onCsvFile = async (file: File | undefined) => {
+    if (!file) return
+    const text = await file.text()
+    const { rows: parsed } = parseHoldingsCsv(text)
+    if (parsed.length === 0) {
+      // 表头缺列或全部数据行非法:库未被动过
+      pushToast({ title: t("pf.csv.importFail"), ttlMs: 5000 })
+    } else {
+      for (const r of parsed) upsert({ id: r.id, amount: r.amount, cost: r.cost, addedAt: r.addedAt })
+      pushToast({ title: t("pf.csv.importOk", { n: parsed.length }), ttlMs: 5000 })
+    }
+    // 允许重复选择同一文件再次导入
+    if (csvRef.current) csvRef.current.value = ""
   }
 
   /* ------------------------------ 加载骨架 ------------------------------ */
@@ -160,6 +203,60 @@ export function PortfolioPage() {
   }
 
   const pnlTone = (v: number | null) => (v == null ? "" : v >= 0 ? "text-up" : "text-down")
+  const fmtSignedUsd = (v: number) =>
+    `${v >= 0 ? "+" : "−"}$${Math.abs(v).toLocaleString("en-US", { maximumFractionDigits: 2 })}`
+
+  const kpis: StatItem[] = [
+    {
+      icon: Coins,
+      label: t("pf.kpi.total"),
+      value: (
+        <AnimatedNumber
+          value={stats.totalValue}
+          format={(v) => `$${v.toLocaleString("en-US", { maximumFractionDigits: 2 })}`}
+        />
+      ),
+      sub: t("pf.kpi.totalSub", { n: holdings.length }),
+    },
+    {
+      icon: Activity,
+      label: "24H",
+      value:
+        stats.pnl24h != null ? (
+          <AnimatedNumber value={stats.pnl24h} format={fmtSignedUsd} />
+        ) : (
+          "—"
+        ),
+      tone: stats.pnl24h != null ? (stats.pnl24h >= 0 ? "up" : "down") : "default",
+      sub:
+        stats.pnl24hPct != null
+          ? `${stats.pnl24hPct >= 0 ? "+" : ""}${stats.pnl24hPct.toFixed(2)}%`
+          : t("pf.kpi.pnl24hNone"),
+      subTone: stats.pnl24hPct != null ? (stats.pnl24hPct >= 0 ? "up" : "down") : "muted",
+    },
+    {
+      icon: Scale,
+      label: t("pf.kpi.costPnl"),
+      value:
+        stats.costPnl != null ? (
+          <AnimatedNumber value={stats.costPnl} format={fmtSignedUsd} />
+        ) : (
+          "—"
+        ),
+      tone: stats.costPnl != null ? (stats.costPnl >= 0 ? "up" : "down") : "default",
+      sub:
+        stats.costPnlPct != null
+          ? `${stats.costPnlPct >= 0 ? "+" : ""}${stats.costPnlPct.toFixed(2)}%`
+          : t("pf.kpi.costPnlNone"),
+      subTone: stats.costPnlPct != null ? (stats.costPnlPct >= 0 ? "up" : "down") : "muted",
+    },
+    {
+      icon: PieChart,
+      label: t("pf.kpi.top"),
+      value: top ? top.symbol : "—",
+      sub: top ? `${top.pct.toFixed(1)}% · ${formatUsdCompact(top.value)}` : "—",
+    },
+  ]
 
   return (
     <main className="mx-auto w-full max-w-7xl flex-1 2xl:max-w-[1680px] 2xl:px-10 space-y-4 px-4 pb-20 pt-6 sm:px-6">
@@ -167,7 +264,7 @@ export function PortfolioPage() {
 
       {/* 空状态引导 */}
       {holdings.length === 0 && form.mode === "closed" ? (
-        <Card className="fade-up">
+        <Card>
           <CardContent className="flex flex-col items-center justify-center gap-3 py-16 text-center">
             <div className="flex size-12 items-center justify-center rounded-full border border-primary/40 bg-primary/10 text-primary">
               <Wallet className="size-5" />
@@ -202,80 +299,38 @@ export function PortfolioPage() {
           )}
 
           {/* KPI 统计条 */}
-          <Card className="fade-up py-0">
-            <CardContent className="grid grid-cols-2 md:grid-cols-4 md:divide-x md:divide-border/60 md:py-0">
-              <div className="flex flex-col gap-1.5 px-5 py-5">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Coins className="size-3.5" />
-                  <span className="font-mono text-[10px] font-semibold tracking-[0.18em] uppercase">
-                    {t("pf.kpi.total")}
-                  </span>
-                </div>
-                <span className="font-mono text-xl font-bold tabular break-all">
-                  ${stats.totalValue.toLocaleString("en-US", { maximumFractionDigits: 2 })}
-                </span>
-                <span className="font-mono text-[10px] text-muted-foreground">
-                  {t("pf.kpi.totalSub", { n: holdings.length })}
-                </span>
-              </div>
-              <div className="flex flex-col gap-1.5 border-l border-border/60 px-5 py-5 md:border-l-0">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <span className="font-mono text-[10px] font-semibold tracking-[0.18em] uppercase">
-                    24H
-                  </span>
-                </div>
-                <span className={cn("font-mono text-xl font-bold tabular", pnlTone(stats.pnl24h))}>
-                  {stats.pnl24h != null
-                    ? `${stats.pnl24h >= 0 ? "+" : "−"}$${Math.abs(stats.pnl24h).toLocaleString("en-US", { maximumFractionDigits: 2 })}`
-                    : "—"}
-                </span>
-                <span className={cn("font-mono text-[10px] tabular", pnlTone(stats.pnl24hPct))}>
-                  {stats.pnl24hPct != null
-                    ? `${stats.pnl24hPct >= 0 ? "+" : ""}${stats.pnl24hPct.toFixed(2)}%`
-                    : t("pf.kpi.pnl24hNone")}
-                </span>
-              </div>
-              <div className="flex flex-col gap-1.5 border-t border-border/60 px-5 py-5 md:border-t-0">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <span className="font-mono text-[10px] font-semibold tracking-[0.18em] uppercase">
-                    {t("pf.kpi.costPnl")}
-                  </span>
-                </div>
-                <span className={cn("font-mono text-xl font-bold tabular", pnlTone(stats.costPnl))}>
-                  {stats.costPnl != null
-                    ? `${stats.costPnl >= 0 ? "+" : "−"}$${Math.abs(stats.costPnl).toLocaleString("en-US", { maximumFractionDigits: 2 })}`
-                    : "—"}
-                </span>
-                <span className={cn("font-mono text-[10px] tabular", pnlTone(stats.costPnlPct))}>
-                  {stats.costPnlPct != null
-                    ? `${stats.costPnlPct >= 0 ? "+" : ""}${stats.costPnlPct.toFixed(2)}%`
-                    : t("pf.kpi.costPnlNone")}
-                </span>
-              </div>
-              <div className="flex flex-col gap-1.5 border-t border-l border-border/60 px-5 py-5 md:border-t-0 md:border-l-0">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <span className="font-mono text-[10px] font-semibold tracking-[0.18em] uppercase">
-                    {t("pf.kpi.top")}
-                  </span>
-                </div>
-                <span className="font-mono text-xl font-bold tabular">
-                  {top ? top.symbol : "—"}
-                </span>
-                <span className="font-mono text-[10px] text-muted-foreground tabular">
-                  {top ? `${top.pct.toFixed(1)}% · ${formatUsdCompact(top.value)}` : "—"}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
+          <StatStrip items={kpis} />
 
           {/* 持仓表 + 配置图 */}
           <div className="grid items-start gap-4 lg:grid-cols-12">
-            <Card className="fade-up lg:col-span-8" style={{ animationDelay: "60ms" }}>
+            <Card className="lg:col-span-8">
               <CardHeader>
                 <CardHead title={t("pf.table.title")} desc={t("pf.table.desc", { n: rows.length })}>
-                  <Button variant="outline" size="sm" className="gap-1.5" onClick={() => openAdd()}>
-                    <Plus className="size-3.5" /> {t("pf.form.add")}
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Button variant="outline" size="sm" className="gap-1.5" onClick={onExportCsv}>
+                      <Download className="size-3.5" /> {t("pf.csv.export")}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5"
+                      onClick={() => csvRef.current?.click()}
+                    >
+                      <Upload className="size-3.5" /> {t("pf.csv.import")}
+                    </Button>
+                    <Button size="sm" className="gap-1.5" onClick={() => openAdd()}>
+                      <Plus className="size-3.5" /> {t("pf.form.add")}
+                    </Button>
+                  </div>
+                  {/* 隐藏文件选择器:按钮触发,保持动作区视觉统一 */}
+                  <input
+                    ref={csvRef}
+                    type="file"
+                    accept=".csv,text/csv"
+                    aria-label={t("pf.csv.import")}
+                    className="hidden"
+                    onChange={(e) => void onCsvFile(e.target.files?.[0])}
+                  />
                 </CardHead>
               </CardHeader>
               <CardContent>
@@ -437,7 +492,7 @@ export function PortfolioPage() {
             </Card>
 
             {/* 配置占比 */}
-            <Card className="fade-up lg:col-span-4" style={{ animationDelay: "120ms" }}>
+            <Card className="lg:col-span-4">
               <CardHeader>
                 <CardHead title={t("pf.alloc.title")} desc={t("pf.alloc.desc")} />
               </CardHeader>
@@ -449,36 +504,58 @@ export function PortfolioPage() {
                 ) : (
                   <>
                     <div className="relative mx-auto w-fit">
-                      <AllocDonut slices={slices} />
-                      <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                        <span className="font-mono text-[9px] tracking-[0.18em] text-muted-foreground uppercase">
-                          {t("pf.kpi.total")}
+                      <AllocDonut slices={slices} activeKey={focusKey} onSliceHover={handleSliceHover} />
+                      {/* 环心读数:悬停资产 / 组合整体 二态切换 */}
+                      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-8 text-center">
+                        <span className="type-label text-muted-foreground">
+                          {focusAlloc ? focusAlloc.symbol : t("pf.kpi.total")}
                         </span>
-                        <span className="mt-1 font-mono text-lg font-bold tabular">
-                          ${stats.totalValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}
-                        </span>
+                        {focusAlloc ? (
+                          <>
+                            <span className="type-num-lg mt-1">{focusAlloc.pct.toFixed(1)}%</span>
+                            <span className="type-meta mt-0.5">{formatUsdCompact(focusAlloc.value)}</span>
+                          </>
+                        ) : (
+                          <span className="type-num-lg mt-1">
+                            ${stats.totalValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                          </span>
+                        )}
                       </div>
                     </div>
-                    <ul className="flex flex-col gap-2">
-                      {alloc.map((a) => (
-                        <li key={a.key} className="flex items-center gap-2.5">
-                          <span
-                            aria-hidden
-                            className="size-2.5 shrink-0 rounded-[3px] border border-border/60"
-                            style={{ background: a.color }}
-                          />
-                          <span className="min-w-0 flex-1 truncate">
-                            <span className="font-mono text-xs font-semibold uppercase">{a.symbol}</span>
-                            <span className="ml-2 hidden text-xs text-muted-foreground sm:inline">{a.name}</span>
-                          </span>
-                          <span className="font-mono text-xs tabular text-muted-foreground">
-                            {formatUsdCompact(a.value)}
-                          </span>
-                          <span className="w-14 text-right font-mono text-xs font-semibold tabular">
-                            {a.pct.toFixed(1)}%
-                          </span>
-                        </li>
-                      ))}
+                    <ul className="flex flex-col gap-1">
+                      {alloc.map((a) => {
+                        const active = focusKey === a.key
+                        return (
+                          <li
+                            key={a.key}
+                            onPointerEnter={() => setFocusKey(a.key)}
+                            onPointerLeave={() => setFocusKey(null)}
+                            className={cn(
+                              "-mx-2 flex items-center gap-2.5 rounded-md px-2 py-1 transition-colors duration-150",
+                              active && "bg-secondary/50"
+                            )}
+                          >
+                            <span
+                              aria-hidden
+                              className={cn(
+                                "size-2.5 shrink-0 rounded-[3px] border",
+                                active ? "border-foreground/40" : "border-border/60"
+                              )}
+                              style={{ background: a.color }}
+                            />
+                            <span className="min-w-0 flex-1 truncate">
+                              <span className="font-mono text-xs font-semibold uppercase">{a.symbol}</span>
+                              <span className="ml-2 hidden text-xs text-muted-foreground sm:inline">{a.name}</span>
+                            </span>
+                            <span className="font-mono text-xs tabular text-muted-foreground">
+                              {formatUsdCompact(a.value)}
+                            </span>
+                            <span className="w-14 text-right font-mono text-xs font-semibold tabular">
+                              {a.pct.toFixed(1)}%
+                            </span>
+                          </li>
+                        )
+                      })}
                     </ul>
                   </>
                 )}

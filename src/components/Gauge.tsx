@@ -1,9 +1,13 @@
+import { useEffect, useState } from "react"
+
 import { t, useT } from "@/i18n"
 import { cn } from "@/lib/utils"
 
 /**
  * 半圆多空仪表盘（-100 → +100，红 → 灰 → 绿）。
  * 弧线五段由恐惧红过渡到贪婪绿，指针指向综合分数。
+ * 指针走 CSS transform rotate 过渡：挂载时从中性位（0 分）摆到 score，
+ * score 后续变化时平滑跟随；reduced-motion 由全局 kill 即时呈现。
  */
 export function SignalGauge({
   score,
@@ -15,6 +19,10 @@ export function SignalGauge({
   className?: string
 }) {
   useT()
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
   const clamped = Math.max(-100, Math.min(100, score))
   const cx = 130
   const cy = 120
@@ -30,10 +38,8 @@ export function SignalGauge({
     return `M ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2}`
   }
 
-  // 指针角度：-100 → 180°，+100 → 0°
-  const angle = Math.PI * (1 - (clamped + 100) / 200)
-  const nx = cx + (r - 22) * Math.cos(angle)
-  const ny = cy - (r - 22) * Math.sin(angle)
+  // 指针旋转角：针身绘制在 -100 位（指向左），CSS 顺时针 rotate 到目标 —— -100 → 0°，0 → 90°，+100 → 180°
+  const deg = mounted ? ((clamped + 100) / 200) * 180 : 90
 
   return (
     <svg
@@ -61,8 +67,18 @@ export function SignalGauge({
         return <line key={t} x1={x1} y1={y1} x2={x2} y2={y2} stroke="var(--muted-foreground)" strokeOpacity="0.45" strokeWidth="1.5" />
       })}
 
-      {/* 指针（继承容器文字色，随主题色变化） */}
-      <line x1={cx} y1={cy} x2={nx} y2={ny} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+      {/* 指针（继承容器文字色，随主题色变化）：transform rotate 过渡，
+          transformBox view-box 使 transform-origin 以 viewBox 用户坐标为准 */}
+      <g
+        style={{
+          transform: `rotate(${deg}deg)`,
+          transformOrigin: `${cx}px ${cy}px`,
+          transformBox: "view-box",
+          transition: "transform 450ms cubic-bezier(0.21, 1, 0.33, 1)",
+        }}
+      >
+        <line x1={cx} y1={cy} x2={cx - (r - 22)} y2={cy} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+      </g>
       <circle cx={cx} cy={cy} r="5.5" fill="currentColor" />
       <circle cx={cx} cy={cy} r="10" fill="none" stroke="currentColor" strokeOpacity="0.3" strokeWidth="1" />
 
@@ -74,7 +90,7 @@ export function SignalGauge({
   )
 }
 
-/** 发散条：中线为 0，左红（空）右绿（多） */
+/** 发散条：中线为 0，左红（空）右绿（多）；width 推进 700ms（.w-anim 统一约定） */
 export function DivergingBar({
   score,
   className,
@@ -88,7 +104,7 @@ export function DivergingBar({
       <div className="absolute inset-y-0 left-1/2 w-px bg-border" />
       <div
         className={cn(
-          "absolute inset-y-0 rounded-full",
+          "w-anim absolute inset-y-0 rounded-full",
           pct >= 0 ? "left-1/2 bg-up" : "right-1/2 bg-down"
         )}
         style={{ width: `${Math.abs(pct)}%` }}

@@ -44,6 +44,10 @@
           localStorage.getItem("crypto-status-theme");
         if (t === "blue" || t === "violet" || t === "mono") {
           document.documentElement.dataset.theme = t;
+          // 同步 PWA 状态栏/移动端顶栏颜色（映射与 useTheme 的 THEME_COLORS
+          // 一致；否则持久化 blue/violet 冷启动时顶栏仍是 mono 底色）
+          var mc = document.querySelector('meta[name="theme-color"]');
+          if (mc) mc.setAttribute("content", t === "blue" ? "#020817" : t === "violet" ? "#030712" : "#171717");
         }
       } catch (e) {}
     </script>

@@ -30,7 +30,8 @@ export const IndicatorBreakdown = memo(function IndicatorBreakdown({ analysis }:
         </CardHead>
       </CardHeader>
 
-      <CardContent className="space-y-1">
+      {/* 行入场：容器挂 .stagger，8 个子元素（表头行 + 7 指标行）按 60ms/步阶差 */}
+      <CardContent className="stagger space-y-1">
         <div className="hidden grid-cols-[24px_minmax(150px,1.2fr)_minmax(110px,0.9fr)_minmax(140px,1.6fr)_72px_80px] items-center gap-4 px-4 pb-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground lg:grid">
           <span className="text-center">{t("common.col.index")}</span>
           <span>{t("common.col.indicator")}</span>
@@ -42,15 +43,17 @@ export const IndicatorBreakdown = memo(function IndicatorBreakdown({ analysis }:
 
         {analysis.indicators.map((ind, i) => {
           const v = verdictOfScore(ind.score)
+          // 判定徽章统一描边式（涨跌色只作边框/文字，不染容器背景——纯黑底上
+          // 红绿实底刺眼）；强弱层级用字重区分（strong 加粗），不用实底
           const cls =
             v.tone === "bull"
               ? v.level === "long"
-                ? "border-transparent bg-up text-up-foreground"
-                : "border-up text-up"
+                ? "border-up text-up font-bold"
+                : "border-up/60 text-up"
               : v.tone === "bear"
                 ? v.level === "short"
-                  ? "border-transparent bg-down text-down-foreground"
-                  : "border-down text-down"
+                  ? "border-down text-down font-bold"
+                  : "border-down/60 text-down"
                 : "text-muted-foreground"
           return (
             <div

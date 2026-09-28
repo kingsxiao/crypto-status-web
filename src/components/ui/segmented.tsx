@@ -33,7 +33,8 @@ export function Segmented<T extends string>({ value, onChange, items, label, cla
             aria-pressed={active}
             onClick={() => onChange(it.value)}
             className={cn(
-              "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:outline-ring inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-sm font-medium whitespace-nowrap transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:outline-1",
+              // 激活态 120-160ms 背景过渡（微反馈档）
+              "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:outline-ring inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-sm font-medium whitespace-nowrap transition-[color,background-color,box-shadow] duration-150 focus-visible:ring-[3px] focus-visible:outline-1",
               active
                 ? "bg-background text-primary shadow-xs"
                 : "hover:text-foreground"

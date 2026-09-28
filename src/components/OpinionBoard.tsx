@@ -65,16 +65,16 @@ export function OpinionRow({ ind, index, wSum }: { ind: IndicatorResult; index: 
     <div
       className="grid grid-cols-2 items-center gap-x-4 gap-y-2 rounded-lg border border-transparent px-4 py-3.5 transition-colors hover:border-border hover:bg-secondary/40 @2xl:grid-cols-[24px_minmax(150px,1.2fr)_minmax(110px,0.9fr)_minmax(140px,1.6fr)_72px_80px] @2xl:gap-4"
     >
-      <span className="order-1 hidden font-mono text-xs text-muted-foreground @2xl:block @2xl:text-center">
+      <span className="type-num order-1 hidden text-xs text-muted-foreground @2xl:block @2xl:text-center">
         {String(index + 1).padStart(2, "0")}
       </span>
 
       <div className="order-1 col-span-2 flex min-w-0 flex-col gap-0.5 @2xl:order-2 @2xl:col-span-1">
         <span className="truncate text-sm font-semibold" title={tm(ind.name)}>{tm(ind.name)}</span>
-        <span className="text-[10px] tracking-wider text-muted-foreground uppercase">{t(kindLabel[ind.kind])}</span>
+        <span className="type-label text-muted-foreground">{t(kindLabel[ind.kind])}</span>
       </div>
 
-      <span className="order-3 font-mono text-sm font-semibold tabular @2xl:order-3 @2xl:text-right">{tm(ind.display)}</span>
+      <span className="type-num order-3 text-sm @2xl:order-3 @2xl:text-right">{tm(ind.display)}</span>
 
       <div className="order-4 col-span-2 flex flex-col gap-1 @2xl:order-4 @2xl:col-span-1">
         <DivergingBar score={ind.score} />
@@ -82,7 +82,7 @@ export function OpinionRow({ ind, index, wSum }: { ind: IndicatorResult; index: 
       </div>
 
       <div className="order-5 flex items-center justify-end gap-2 @2xl:contents">
-        <span className="font-mono text-[10px] text-muted-foreground @2xl:text-right @2xl:text-xs">
+        <span className="type-num text-[10px] text-muted-foreground @2xl:text-right @2xl:text-xs">
           {((ind.weight / wSum) * 100).toFixed(0)}%
         </span>
         <Badge variant="outline" className={cn("@2xl:justify-self-end", v.cls)}>
@@ -114,17 +114,17 @@ export function OpinionSummary({
     <div className={cn("space-y-3", compact ? "px-4 pb-1" : "rounded-lg bg-secondary/50 p-4 sm:p-5")}>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex items-end gap-3">
-          <span className="font-mono text-4xl leading-none font-bold tabular sm:text-5xl">
+          <span className="type-num-xl leading-none sm:text-5xl">
             {composite > 0 ? "+" : ""}
             {composite}
           </span>
           <div className="flex flex-col gap-1 pb-0.5">
             <span className="text-base font-semibold">{label}</span>
-            <span className="font-mono text-[10px] text-muted-foreground">{t("ob.unit")}</span>
+            <span className="type-label text-muted-foreground">{t("ob.unit")}</span>
           </div>
         </div>
         {counts && (
-          <div className="flex items-center gap-3 font-mono text-xs">
+          <div className="type-num flex items-center gap-3 text-xs">
             <span className="text-up">{t("ob.countBull", { n: counts.bull })}</span>
             <span className="text-muted-foreground">{t("ob.countNeutral", { n: counts.neutral })}</span>
             <span className="text-down">{t("ob.countBear", { n: counts.bear })}</span>
@@ -132,12 +132,12 @@ export function OpinionSummary({
         )}
       </div>
       <CompositeBar composite={composite} />
-      <div className="flex justify-between font-mono text-[10px] text-muted-foreground">
+      <div className="type-label flex justify-between text-muted-foreground">
         <span>{t("ob.scaleBear")}</span>
         <span>{t("ob.scaleMid")}</span>
         <span>{t("ob.scaleBull")}</span>
       </div>
-      {note && <p className="text-[10px] text-muted-foreground">{note}</p>}
+      {note && <p className="type-meta">{note}</p>}
     </div>
   )
 }
@@ -157,7 +157,9 @@ export const OpinionBoard = memo(function OpinionBoard({
   useT()
   const wSum = analysis.indicators.reduce((a, i) => a + i.weight, 0)
   return (
-    <Card className="fade-up">
+    // 入场由上层容器承担（route-fade / data-reveal，契约：入场动效不叠加），
+    // 卡片自身不再挂 fade-up
+    <Card>
       <CardHeader>
         <CardHead title={title ?? t("ob.title")} desc={description ?? t("ob.formula")}>
           {badge && (
@@ -174,7 +176,7 @@ export const OpinionBoard = memo(function OpinionBoard({
           counts={analysis.counts}
           note={analysis.note ? t("coin.note", { list: joinList(analysis.note.missing.map((k) => t(k))) }) : null}
         />
-        <div className="hidden grid-cols-[24px_minmax(150px,1.2fr)_minmax(110px,0.9fr)_minmax(140px,1.6fr)_72px_80px] items-center gap-4 px-4 pb-1 text-[10px] font-medium tracking-widest text-muted-foreground uppercase @2xl:grid">
+        <div className="type-label hidden grid-cols-[24px_minmax(150px,1.2fr)_minmax(110px,0.9fr)_minmax(140px,1.6fr)_72px_80px] items-center gap-4 px-4 pb-1 text-muted-foreground @2xl:grid">
           <span className="text-center">{t("common.col.index")}</span>
           <span>{t("common.col.indicator")}</span>
           <span className="text-right">{t("common.col.readout")}</span>

@@ -57,7 +57,7 @@ function ThemePicker() {
       <Button
         variant="outline"
         size="sm"
-        className="size-8 gap-0 p-0"
+        className="size-10 gap-0 p-0 sm:size-8"
         aria-label={t("hdr.theme")}
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
@@ -117,7 +117,7 @@ function LanguagePicker() {
       <Button
         variant="outline"
         size="sm"
-        className="size-8 gap-0 p-0"
+        className="size-10 gap-0 p-0 sm:size-8"
         aria-label={t("hdr.language")}
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
@@ -207,7 +207,7 @@ export function Header() {
               className={({ isActive }) =>
                 cn(
                   // px-2：十项导航在 1664px 英文界面也放得下（更宽的 px-3 会溢出）
-                  "flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] transition-colors",
+                  "nav-underline flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] transition-colors",
                   isActive
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
@@ -235,7 +235,7 @@ export function Header() {
             size="sm"
             onClick={refresh}
             disabled={refreshing}
-            className="size-8 gap-0 p-0"
+            className="size-10 gap-0 p-0 sm:size-8"
             aria-label={t("common.refresh")}
           >
             <RotateCw className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
@@ -243,11 +243,11 @@ export function Header() {
           <ThemePicker />
           <LanguagePicker />
 
-          {/* 移动端汉堡 */}
+          {/* 移动端汉堡（移动断点放大触控目标，接近 44px 触控标准） */}
           <Button
             variant="outline"
             size="sm"
-            className={cn("size-8 gap-0 p-0", burgerShow)}
+            className={cn("size-10 gap-0 p-0 sm:size-8", burgerShow)}
             aria-label={menuOpen ? t("hdr.menu.close") : t("hdr.menu.open")}
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((v) => !v)}

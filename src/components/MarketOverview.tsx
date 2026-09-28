@@ -2,11 +2,11 @@ import { memo } from "react"
 import { Globe2, Layers, TrendingUp, Volume2 } from "lucide-react"
 
 import { Card, CardContent } from "@/components/ui/card"
-import { IconChip } from "@/components/ui/icon-chip"
+import { AnimatedNumber } from "@/components/ui/animated-number"
+import { StatStrip, type StatItem } from "@/components/ui/stat"
 import { t, useT } from "@/i18n"
 import type { GlobalData } from "@/lib/api"
 import { formatPct, formatUsdCompact } from "@/lib/format"
-import { cn } from "@/lib/utils"
 
 /** 全球市场概览条（CoinGecko 限流时降级为提示条） */
 export const MarketOverview = memo(function MarketOverview({ global }: { global: GlobalData }) {
@@ -24,67 +24,40 @@ export const MarketOverview = memo(function MarketOverview({ global }: { global:
     )
   }
 
-  const items = [
+  const chgUp = global.market_cap_change_24h_pct >= 0
+
+  const items: StatItem[] = [
     {
       icon: Globe2,
       label: t("mo.mcap"),
-      value: formatUsdCompact(global.total_market_cap_usd),
+      value: <AnimatedNumber value={global.total_market_cap_usd} format={formatUsdCompact} />,
+      // 24H 子行涨跌色随快照刷新（快照重取后按新涨跌方向重新着色）
       sub: `24H ${formatPct(global.market_cap_change_24h_pct)}`,
-      subUp: global.market_cap_change_24h_pct >= 0,
+      subTone: chgUp ? "up" : "down",
     },
     {
       icon: Volume2,
       label: t("mo.vol"),
-      value: formatUsdCompact(global.total_volume_usd),
+      value: <AnimatedNumber value={global.total_volume_usd} format={formatUsdCompact} />,
       sub: t("mo.active", { n: global.active_cryptocurrencies.toLocaleString() }),
     },
     {
       icon: Layers,
       label: t("mo.dom"),
-      value: `${global.btc_dominance.toFixed(1)}%`,
+      value: (
+        <AnimatedNumber value={global.btc_dominance} format={(v) => `${v.toFixed(1)}%`} />
+      ),
       sub: `ETH ${global.eth_dominance.toFixed(1)}%`,
     },
     {
       icon: TrendingUp,
       label: t("mo.chg"),
-      value: formatPct(global.market_cap_change_24h_pct),
-      sub: global.market_cap_change_24h_pct >= 0 ? t("mo.inflow") : t("mo.outflow"),
-      subUp: global.market_cap_change_24h_pct >= 0,
+      value: <AnimatedNumber value={global.market_cap_change_24h_pct} format={formatPct} />,
+      // 涨跌只染数字：主读数与子行按方向着色
+      tone: chgUp ? "up" : "down",
+      sub: chgUp ? t("mo.inflow") : t("mo.outflow"),
     },
   ]
 
-  return (
-    <Card className="py-0">
-      <CardContent className="grid grid-cols-2 px-0 md:grid-cols-4 md:divide-x md:divide-border/60 md:py-0">
-        {items.map((it, i) => (
-          <div
-            key={it.label}
-            className={cn(
-              "flex flex-col gap-2 px-4 py-5 md:px-5",
-              // 移动端 2×2 手动补分隔线（md 起由 divide-x 接管）
-              i % 2 === 1 && "border-l border-border/60 md:border-l-0",
-              i >= 2 && "border-t border-border/60 md:border-t-0",
-            )}
-          >
-            <div className="flex min-w-0 items-center gap-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
-              <IconChip><it.icon strokeWidth={2} /></IconChip>
-              <span className="truncate" title={it.label}>{it.label}</span>
-            </div>
-            <div className="font-mono text-xl font-bold tabular">{it.value}</div>
-            <div
-              className={`font-mono text-[11px] ${
-                it.subUp === undefined
-                  ? "text-muted-foreground"
-                  : it.subUp
-                    ? "text-up"
-                    : "text-down"
-              }`}
-            >
-              {it.sub}
-            </div>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  )
+  return <StatStrip items={items} />
 })

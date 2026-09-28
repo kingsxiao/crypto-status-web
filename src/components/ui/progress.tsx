@@ -23,10 +23,11 @@ function Progress({
       <ProgressPrimitive.Indicator
         data-slot="progress-indicator"
         className={cn(
-          "bg-primary h-full w-full flex-1 transition-all",
+          // 进度/占比类 width 推进统一 700ms linear（index.css .w-anim 约定）
+          "bg-primary h-full flex-1 w-anim",
           indicatorClassName
         )}
-        style={{ transform: `translateX(-${100 - (value || 0)}%)` }}
+        style={{ width: `${value || 0}%` }}
       />
     </ProgressPrimitive.Root>
   )

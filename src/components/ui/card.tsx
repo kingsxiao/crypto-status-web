@@ -47,7 +47,7 @@ function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-description"
-      className={cn("text-muted-foreground text-sm", className)}
+      className={cn("text-muted-foreground text-xs leading-relaxed", className)}
       {...props}
     />
   )
@@ -129,7 +129,7 @@ function CardKicker({
 }
 
 /**
- * 内容卡头（表格 / 图表 / 说明卡）：15px 主标题 + 描述，右侧留给动作控件或内容徽标。
+ * 内容卡头（表格 / 图表 / 说明卡）：.type-title 卡题 + 描述，右侧留给动作控件或内容徽标。
  */
 function CardHead({
   title,
@@ -143,13 +143,16 @@ function CardHead({
   children?: React.ReactNode
 }) {
   return (
-    <div className={cn("flex flex-wrap items-center justify-between gap-3", className)}>
+    <div className={cn("flex min-w-0 flex-wrap items-center justify-between gap-3", className)}>
       <div className="min-w-0">
-        <CardTitle className="text-[15px] font-semibold tracking-tight">{title}</CardTitle>
-        {desc && <CardDescription className="mt-1 text-xs">{desc}</CardDescription>}
+        <CardTitle className="type-title">{title}</CardTitle>
+        {desc && <CardDescription className="mt-1">{desc}</CardDescription>}
       </div>
       {children != null && (
-        <div className="flex shrink-0 flex-wrap items-center gap-2">{children}</div>
+        // 窄卡时动作区整行换行并占满行宽（w-full），徽章 max-w-full 才能解析到
+        // 真实容器宽而截断；sm+ 恢复右侧行内布局。仅 min-w-0 不够 —— 徽章
+        // shrink-0/w-fit 的内容宽度会把卡头与页面一起撑出横向溢出
+        <div className="flex min-w-0 w-full flex-wrap items-center gap-2 sm:w-auto">{children}</div>
       )}
     </div>
   )

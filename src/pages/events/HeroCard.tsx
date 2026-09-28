@@ -1,5 +1,6 @@
-/** 英雄卡：下一个关键事件 / 正在进行的事件（倒计时数字盒 + BTC 实时观测 + 进度） */
+/** 英雄卡：下一个关键事件 / 正在进行的事件（倒计时拨盘 + BTC 实时观测 + 进度） */
 
+import { useLayoutEffect, useState, type ReactNode } from "react"
 import { CalendarClock, ExternalLink } from "lucide-react"
 
 import { LivePrice, Pct } from "@/components/price-cells"
@@ -18,7 +19,45 @@ import { cn } from "@/lib/utils"
 
 import { CategoryChip, ImpactBadge } from "./widgets"
 
-/** 倒计时数字盒：until=距 start 还有多久，since=自 start 已过多久。秒级跳动由内部心跳驱动 */
+/** 拨盘刻度：满环 = 距事件 7 天（7 天开外的宏观节奏不在环上细分，恒满环） */
+const RING_HORIZON_MS = 7 * 86_400_000
+
+/**
+ * 「天」拨盘：数字盒外的 SVG 倒计时环 — 满环 7 天，primary 弧 = 剩余占比。
+ * 挂载一次生长（首帧空弧 → 900ms 描到位），之后弧长随剩余时间平滑收敛；
+ * 纯装饰层 aria-hidden，数字仍是唯一可读内容。reduced-motion 由全局 kill
+ * 使 transition 即时完成，直接呈现终态弧。
+ */
+function DayDial({ frac, children }: { frac: number; children: ReactNode }) {
+  const [armed, setArmed] = useState(false)
+  useLayoutEffect(() => {
+    const raf = requestAnimationFrame(() => setArmed(true))
+    return () => cancelAnimationFrame(raf)
+  }, [])
+  return (
+    <span className="relative flex size-[3.25rem] items-center justify-center sm:size-14">
+      <svg aria-hidden viewBox="0 0 36 36" className="absolute inset-0 size-full -rotate-90">
+        <circle cx="18" cy="18" r="16.5" fill="none" strokeWidth="2" className="stroke-border/60" />
+        <circle
+          cx="18"
+          cy="18"
+          r="16.5"
+          fill="none"
+          strokeWidth="2"
+          pathLength={1}
+          strokeDasharray={1}
+          strokeDashoffset={armed ? 1 - frac : 1}
+          strokeLinecap="round"
+          className="stroke-primary transition-[stroke-dashoffset] duration-[900ms] ease-[cubic-bezier(0.21,1,0.33,1)]"
+        />
+      </svg>
+      {children}
+    </span>
+  )
+}
+
+/** 倒计时数字盒：until=距 start 还有多久，since=自 start 已过多久。秒级跳动由内部心跳驱动。
+ * 「天」位是圆形拨盘（外圈倒计时环），时/分/秒保持线盒 —— 距离越近环越短。 */
 function CountdownBoxes({
   start,
   mode,
@@ -30,20 +69,27 @@ function CountdownBoxes({
 }) {
   const now = useNow()
   const { d, h, m, s } = countdownParts(Math.abs(mode === "until" ? start - now : now - start))
+  // 进行中：环走满（倒数已归零，"此刻已到"）；未开始：剩余占比，7 天开外钳到 1
+  const frac = mode === "since" ? 1 : Math.min(1, Math.max(0, (start - now) / RING_HORIZON_MS))
   const units: [number, string][] = [
-    [d, t("ev.cd.d")],
     [h, t("ev.cd.h")],
     [m, t("ev.cd.m")],
     [s, t("ev.cd.s")],
   ]
   return (
     <div role="timer" className="flex items-start gap-2 sm:gap-3" dir="ltr">
-      {approx && <span className="pt-3 font-mono text-lg text-muted-foreground">≈</span>}
-      {units.map(([v, label], i) => (
+      {approx && <span className="pt-3.5 font-mono text-lg text-muted-foreground">≈</span>}
+      <div className="flex w-[3.25rem] flex-col items-center gap-1 sm:w-14">
+        <DayDial frac={frac}>
+          <span className="type-num text-2xl font-bold sm:text-[1.7rem]">{String(d).padStart(2, "0")}</span>
+        </DayDial>
+        <span className="font-mono text-[9px] tracking-[0.2em] text-muted-foreground uppercase">{t("ev.cd.d")}</span>
+      </div>
+      {units.map(([v, label]) => (
         <div key={label} className="flex items-start gap-2 sm:gap-3">
-          {i > 0 && <span className="pt-2 font-mono text-xl font-bold text-muted-foreground/50 sm:pt-2.5">:</span>}
+          <span className="pt-2 font-mono text-xl font-bold text-muted-foreground/50 sm:pt-2.5">:</span>
           <div className="flex w-12 flex-col items-center gap-1 sm:w-14">
-            <span className="w-full rounded-md border border-border/60 bg-secondary/40 py-1.5 text-center font-mono text-2xl font-bold tabular sm:py-2 sm:text-3xl">
+            <span className="type-num w-full rounded-md border border-border/60 bg-secondary/40 py-1.5 text-center text-2xl font-bold sm:py-2 sm:text-3xl">
               {String(v).padStart(2, "0")}
             </span>
             <span className="font-mono text-[9px] tracking-[0.2em] text-muted-foreground uppercase">{label}</span>
@@ -107,7 +153,7 @@ export function HeroCard({
   const afterTitle = after ? (locale === "en" ? after.en : after.zh) : null
 
   return (
-    <Card className={cn("fade-up", live && "border-primary/30")}>
+    <Card className={cn(live && "border-primary/30")}>
       <CardHeader>
         <CardKicker
           title={

@@ -44,6 +44,25 @@ function ScrollToTop() {
   return null
 }
 
+/**
+ * 路由淡入（基础层全局机制）：key 取 pathname 首段 —— /coin/bitcoin →
+ * /coin/ethereum 只换 param 不重挂、不播淡入（页面内 CoinDetail 已有
+ * key={coin.id} 自行处理换币重挂），/markets → /coin/x 才整页换轨播淡入。
+ *
+ * 入场动效不叠加（全分区统一执行）：整页入场由本 route-fade 承担，
+ * 分区删除首屏容器上的 fade-up；滚动后内容用 .reveal（配 useReveal）；
+ * 卡片内部子元素用 .stagger —— 三者不叠加成双重入场。
+ */
+function RouteFade({ children }: { children: React.ReactNode }) {
+  const { pathname } = useLocation()
+  const segment = pathname.split("/")[1] || "/"
+  return (
+    <div key={segment} className="route-fade flex flex-1 flex-col">
+      {children}
+    </div>
+  )
+}
+
 /** 懒加载页面占位：与各页骨架屏风格一致（页头 + 卡片网格 + 表格剪影） */
 function RouteFallback() {
   return (
@@ -90,22 +109,24 @@ export default function App() {
           <Header />
           <ScrollToTop />
 
-          <Suspense fallback={<RouteFallback />}>
-            <Routes>
-              <Route path="/" element={<DashboardPage />} />
-              <Route path="/markets" element={<MarketsPage />} />
-              <Route path="/coin/:id" element={<CoinPage />} />
-              <Route path="/sentiment" element={<SentimentPage />} />
-              <Route path="/verdict" element={<VerdictPage />} />
-              <Route path="/converter" element={<ConverterPage />} />
-              <Route path="/portfolio" element={<PortfolioPage />} />
-              <Route path="/alerts" element={<AlertsPage />} />
-              <Route path="/events" element={<EventsPage />} />
-              <Route path="/about" element={<AboutPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Suspense>
+          <RouteFade>
+            <Suspense fallback={<RouteFallback />}>
+              <Routes>
+                <Route path="/" element={<DashboardPage />} />
+                <Route path="/markets" element={<MarketsPage />} />
+                <Route path="/coin/:id" element={<CoinPage />} />
+                <Route path="/sentiment" element={<SentimentPage />} />
+                <Route path="/verdict" element={<VerdictPage />} />
+                <Route path="/converter" element={<ConverterPage />} />
+                <Route path="/portfolio" element={<PortfolioPage />} />
+                <Route path="/alerts" element={<AlertsPage />} />
+                <Route path="/events" element={<EventsPage />} />
+                <Route path="/about" element={<AboutPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Suspense>
+          </RouteFade>
 
           <Footer />
           <BackToTop />

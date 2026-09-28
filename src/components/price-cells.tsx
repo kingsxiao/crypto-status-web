@@ -8,8 +8,17 @@ import type { Coin } from "@/lib/api"
 import { formatPct, formatPrice } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
-/** 价格变动时闪动一次：背景色 24% 涂层渐隐 + 涨跌着色 */
-export function LivePrice({ price }: { price: number }) {
+/**
+ * 价格变动时闪动一次：背景色 24% 涂层渐隐 + 涨跌着色。
+ *
+ * 机制说明（两种 flash，不可混用）：
+ *  - 本组件是 **state 型 flash**：组件不重挂，靠内部 state 挂/摘类，
+ *    适用于长生命周期容器（行情表 / 持仓表单元格）；
+ *  - CoinDetail 头部价格是 **key 重挂型 flash**（CoinDetail.tsx 以
+ *    key={flash} 重挂触发动画）——该处父容器本身随换币 key 重挂，
+ *    value-change 类动效（含 AnimatedNumber）在那里永不触发，不得套用。
+ */
+export function LivePrice({ price, className }: { price: number; className?: string }) {
   const prev = useRef<number | null>(null)
   const [flash, setFlash] = useState<"up" | "down" | null>(null)
 
@@ -26,9 +35,10 @@ export function LivePrice({ price }: { price: number }) {
   return (
     <span
       className={cn(
-        "inline-block rounded px-1.5 py-0.5 font-mono font-semibold tabular",
+        "type-num inline-block rounded px-1.5 py-0.5",
         flash === "up" && "flash-up text-up",
-        flash === "down" && "flash-down text-down"
+        flash === "down" && "flash-down text-down",
+        className
       )}
     >
       ${formatPrice(price)}
@@ -38,8 +48,11 @@ export function LivePrice({ price }: { price: number }) {
 
 export function Pct({ v }: { v: number | null | undefined }) {
   if (v == null) return <span className="text-muted-foreground">—</span>
+  // 近零涨跌（稳定币 ±0.0x%）降级为弱化色：保留符号但不再全强度染红绿，
+  // 避免稀释真实涨跌信号
+  const nearZero = Math.abs(v) < 0.05
   return (
-    <span className={cn("tabular font-mono", v >= 0 ? "text-up" : "text-down")}>
+    <span className={cn("type-num", nearZero ? "text-muted-foreground" : v >= 0 ? "text-up" : "text-down")}>
       {formatPct(v)}
     </span>
   )

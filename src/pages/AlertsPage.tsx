@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import {
+  BellOff,
   BellPlus,
   BellRing,
   ChevronDown,
@@ -73,6 +74,30 @@ function KindBadge({ kind }: { kind: AlertKind }) {
   )
 }
 
+/** 目标价预设模板:±5% / ±10% / ±20% + 整数关口 */
+const PRESETS = [
+  { mult: 1.05, label: "+5%" },
+  { mult: 1.1, label: "+10%" },
+  { mult: 1.2, label: "+20%" },
+  { mult: 0.95, label: "−5%" },
+  { mult: 0.9, label: "−10%" },
+  { mult: 0.8, label: "−20%" },
+]
+
+/** 数量级 1/10 的整数关口:67,432 → 1,000 步进(above 68,000 / below 67,000) */
+function roundTarget(p: number, kind: AlertKind): number {
+  const step = Math.pow(10, Math.floor(Math.log10(p)) - 1)
+  const dec = Math.max(0, -Math.floor(Math.log10(step) + 1e-9))
+  const raw = kind === "above" ? Math.ceil(p / step) * step : Math.floor(p / step) * step
+  const v = kind === "above" ? (raw <= p ? raw + step : raw) : (raw >= p ? raw - step : raw)
+  return Number(v.toFixed(dec))
+}
+
+/** 距离 → 接近度:距目标 20% 以上为 0,触达目标为 1(进度条宽度) */
+function closeness(dist: number): number {
+  return Math.max(0, Math.min(1, 1 - Math.abs(dist) / 20))
+}
+
 export function AlertsPage() {
   useT()
   usePageMeta({ title: t("meta.alerts"), description: t("page.alerts.desc") })
@@ -89,7 +114,7 @@ export function AlertsPage() {
   const [price, setPrice] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [permTick, setPermTick] = useState(0)
-  // 两个二次确认各自独立实例（与 PortfolioPage 同一套防御）
+  // 两个二次确认各自独立实例(与 PortfolioPage 同一套防御)
   const deleteConfirm = useTwoStepConfirm<string>()
   const clearConfirm = useTwoStepConfirm<true>()
 
@@ -100,10 +125,28 @@ export function AlertsPage() {
   )
   const full = alerts.length >= MAX_ALERTS
 
+  // 新转入历史的行闪现:以 id:triggeredAt 为键跟踪已见行(首屏存量不闪,
+  // 重新武装后再触发会产生新键、再次闪现);键集只在渲染后追加,渲染期只读
+  const [seenKeys] = useState(
+    () => new Set(triggered.map((a) => `${a.id}:${a.triggeredAt ?? 0}`))
+  )
+  const flashKeys = useMemo(
+    () =>
+      new Set(
+        triggered
+          .filter((a) => !seenKeys.has(`${a.id}:${a.triggeredAt ?? 0}`))
+          .map((a) => `${a.id}:${a.triggeredAt ?? 0}`)
+      ),
+    [triggered, seenKeys]
+  )
+  useEffect(() => {
+    for (const a of triggered) seenKeys.add(`${a.id}:${a.triggeredAt ?? 0}`)
+  }, [triggered, seenKeys])
+
   const priceOf = (id: string) => tickers[id]?.price ?? coins.find((c) => c.id === id)?.current_price ?? null
-  // 可创建预警的币只列实时源（TRADE_SYMBOLS）覆盖的 —— 可选集与推送集一致，
-  // 新建规则才一定有价可判；深链 ?coin= 带入集合外的历史脏值（如 tether）
-  // 时渲染期回退首个可选币，受控 select 不得显示空白
+  // 可创建预警的币只列实时源(TRADE_SYMBOLS)覆盖的 —— 可选集与推送集一致,
+  // 新建规则才一定有价可判;深链 ?coin= 带入集合外的历史脏值(如 tether)
+  // 时渲染期回退首个可选币,受控 select 不得显示空白
   const selectable = useMemo(() => coins.filter((c) => TRADE_SYMBOLS[c.id] != null), [coins])
   const validCoinId =
     selectable.length === 0 || selectable.some((c) => c.id === coinId)
@@ -140,7 +183,7 @@ export function AlertsPage() {
       }),
       ttlMs: 4500,
     })
-    // 借用户手势请求通知权限；拒绝也不阻断创建（页内 toast 仍然有效）
+    // 借用户手势请求通知权限;拒绝也不阻断创建(页内 toast 仍然有效)
     if (notifySupported() && Notification.permission === "default") {
       requestNotifyPermission().then(() => setPermTick((x) => x + 1))
     }
@@ -150,6 +193,12 @@ export function AlertsPage() {
     if (curPrice == null || curPrice <= 0) return
     setKind(mult > 1 ? "above" : "below")
     setPrice((curPrice * mult).toFixed(curPrice >= 1000 ? 0 : 2))
+    setError(null)
+  }
+
+  const quickRound = () => {
+    if (curPrice == null || curPrice <= 0) return
+    setPrice(String(roundTarget(curPrice, kind)))
     setError(null)
   }
 
@@ -231,7 +280,7 @@ export function AlertsPage() {
       </PageHeader>
 
       {/* 新建预警 */}
-      <Card className="fade-up">
+      <Card>
         <CardHeader>
           <CardHead
             title={
@@ -245,10 +294,10 @@ export function AlertsPage() {
             desc={t("al.create.desc")}
           />
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        <CardContent className="stagger flex flex-col gap-3">
           <div className="grid gap-2 sm:grid-cols-[1fr_auto_1fr_auto]">
             <div>
-              <label htmlFor="al-coin" className="mb-1 block font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
+              <label htmlFor="al-coin" className="type-label mb-1 block text-muted-foreground">
                 {t("al.create.coin")}
               </label>
               <div className="relative">
@@ -273,7 +322,7 @@ export function AlertsPage() {
               </div>
             </div>
             <div>
-              <span className="mb-1 block font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
+              <span className="type-label mb-1 block text-muted-foreground">
                 {t("al.create.dir")}
               </span>
               <Segmented
@@ -288,7 +337,7 @@ export function AlertsPage() {
               />
             </div>
             <div>
-              <label htmlFor="al-price" className="mb-1 block font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
+              <label htmlFor="al-price" className="type-label mb-1 block text-muted-foreground">
                 {t("al.create.price")}
               </label>
               <Input
@@ -311,18 +360,11 @@ export function AlertsPage() {
             </div>
           </div>
 
-          {/* 快捷目标价：基于所选币现价 */}
+          {/* 目标价预设模板:±5%/±10%/±20% + 整数关口(按当前方向取最近关口) */}
           {curPrice != null && curPrice > 0 && (
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
-                {t("al.quick")}
-              </span>
-              {[
-                { mult: 1.05, label: "+5%" },
-                { mult: 1.1, label: "+10%" },
-                { mult: 0.95, label: "−5%" },
-                { mult: 0.9, label: "−10%" },
-              ].map((q) => {
+              <span className="type-label text-muted-foreground">{t("al.quick")}</span>
+              {PRESETS.map((q) => {
                 const v = curPrice * q.mult
                 return (
                   <button
@@ -331,15 +373,24 @@ export function AlertsPage() {
                     onClick={() => quick(q.mult)}
                     title={`$${formatPrice(v)}`}
                     className={cn(
-                      "rounded border px-2.5 py-1 font-mono text-[11px] transition-colors hover:border-foreground hover:text-foreground",
-                      q.mult > 1 ? "text-up" : "text-down",
-                      "border-border text-muted-foreground"
+                      "rounded border border-border px-2.5 py-1 font-mono text-[11px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground",
+                      // 涨跌色后置:tailwind-merge 同组后到优先,基色放前面 tint 才不被吃掉
+                      q.mult > 1 ? "text-up" : "text-down"
                     )}
                   >
                     {q.label}
                   </button>
                 )
               })}
+              <span aria-hidden className="mx-1 h-4 w-px bg-border/70" />
+              <button
+                type="button"
+                onClick={quickRound}
+                title={`$${formatPrice(roundTarget(curPrice, kind))}`}
+                className="rounded border border-border px-2.5 py-1 font-mono text-[11px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+              >
+                {t("al.preset.round")}
+              </button>
               <span className="ml-1 font-mono text-[10px] text-muted-foreground">
                 1 {selectedCoin?.symbol.toUpperCase() ?? ""} = ${formatPrice(curPrice)}
               </span>
@@ -353,7 +404,7 @@ export function AlertsPage() {
       </Card>
 
       {/* 进行中 */}
-      <Card className="fade-up" style={{ animationDelay: "60ms" }}>
+      <Card>
         <CardHeader>
           <CardHead
             title={t("al.active.title")}
@@ -369,9 +420,17 @@ export function AlertsPage() {
         </CardHeader>
         <CardContent>
           {active.length === 0 ? (
-            <div className="flex h-32 flex-col items-center justify-center gap-1.5 text-center">
-              <p className="text-sm font-semibold">{t("al.active.empty")}</p>
-              <p className="max-w-xs text-xs text-muted-foreground">{t("al.active.emptyDesc")}</p>
+            /* 空态与 portfolio 同构：圆形描边图标 + 标题 + 说明居中 */
+            <div className="flex h-44 flex-col items-center justify-center gap-3 py-6 text-center">
+              <div className="flex size-12 items-center justify-center rounded-full border border-primary/40 bg-primary/10 text-primary">
+                <BellOff className="size-5" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">{t("al.active.empty")}</p>
+                <p className="mx-auto mt-1.5 max-w-xs text-xs leading-relaxed text-muted-foreground">
+                  {t("al.active.emptyDesc")}
+                </p>
+              </div>
             </div>
           ) : (
             <Table>
@@ -414,8 +473,21 @@ export function AlertsPage() {
                           <span className="font-mono text-sm tabular">{cur != null ? `$${formatPrice(cur)}` : "—"}</span>
                         )}
                       </TableCell>
-                      <TableCell className="hidden text-right font-mono text-xs tabular text-muted-foreground sm:table-cell">
-                        {dist != null ? `${dist >= 0 ? "+" : ""}${dist.toFixed(2)}%` : "—"}
+                      <TableCell className="hidden sm:table-cell">
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="font-mono text-xs tabular text-muted-foreground">
+                            {dist != null ? `${dist >= 0 ? "+" : ""}${dist.toFixed(2)}%` : "—"}
+                          </span>
+                          {dist != null && (
+                            /* 接近度微型进度:距目标越近填充越满(20% 外为空),随行情推进 */
+                            <div aria-hidden className="h-1 w-16 overflow-hidden rounded-full bg-secondary">
+                              <div
+                                className="w-anim h-full rounded-full bg-primary"
+                                style={{ width: `${closeness(dist) * 100}%` }}
+                              />
+                            </div>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Tooltip>
@@ -450,7 +522,7 @@ export function AlertsPage() {
       </Card>
 
       {/* 触发历史 */}
-      <Card className="fade-up" style={{ animationDelay: "120ms" }}>
+      <Card>
         <CardHeader>
           <CardHead title={t("al.history.title")} desc={t("al.history.desc", { n: triggered.length })}>
             {triggered.length > 0 && (
@@ -470,9 +542,12 @@ export function AlertsPage() {
         </CardHeader>
         <CardContent>
           {triggered.length === 0 ? (
-            <div className="flex h-28 flex-col items-center justify-center gap-1.5 text-center">
-              <History className="size-4 text-muted-foreground/50" />
-              <p className="text-xs text-muted-foreground">{t("al.history.empty")}</p>
+            /* 空态与 portfolio / 进行中卡同构：圆形描边图标 + 标题居中 */
+            <div className="flex h-36 flex-col items-center justify-center gap-3 py-6 text-center">
+              <div className="flex size-12 items-center justify-center rounded-full border border-primary/40 bg-primary/10 text-primary">
+                <History className="size-5" />
+              </div>
+              <p className="text-sm font-semibold">{t("al.history.empty")}</p>
             </div>
           ) : (
             <Table>
@@ -489,74 +564,81 @@ export function AlertsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {triggered.map((a) => (
-                  <TableRow key={a.id} className="hover:bg-secondary/40">
-                    <TableCell>
-                      <div className="flex items-center gap-2.5">
-                        <span className="flex size-7 items-center justify-center rounded-full border font-mono text-[10px] text-muted-foreground">
-                          {a.symbol.slice(0, 1)}
-                        </span>
-                        <span className="font-mono text-sm font-semibold uppercase">{a.symbol}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <KindBadge kind={a.kind} />
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-sm font-semibold tabular">
-                      ${formatPrice(a.price)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-sm font-semibold tabular text-up">
-                      ${a.triggeredPrice != null ? formatPrice(a.triggeredPrice) : "—"}
-                    </TableCell>
-                    <TableCell className="hidden text-right font-mono text-xs tabular text-muted-foreground sm:table-cell">
-                      {a.triggeredAt != null ? formatDateTime(a.triggeredAt) : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-end gap-1">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              aria-label={t("al.rearmSr", { symbol: a.symbol })}
-                              onClick={() => rearm(a.id)}
-                              className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                            >
-                              <RotateCcw className="size-3.5" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent>{t("al.rearm")}</TooltipContent>
-                        </Tooltip>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                        <button
-                          aria-label={t("al.deleteSr", { symbol: a.symbol })}
-                          onClick={() => {
-                            if (deleteConfirm.confirm(a.id)) remove(a.id)
-                          }}
-                          className={cn(
-                            "rounded p-1.5 transition-colors",
-                            deleteConfirm.armed === a.id
-                              ? "bg-down/15 text-down"
-                              : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                          )}
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {deleteConfirm.armed === a.id ? t("pf.deleteConfirm") : t("common.delete")}
-                      </TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {triggered.map((a) => {
+                  const flashKey = `${a.id}:${a.triggeredAt ?? 0}`
+                  return (
+                    <TableRow
+                      key={a.id}
+                      /* 新转入的行打一次涨色渐隐涂层(既有 flash-up 机制),提示刚触发 */
+                      className={cn("hover:bg-secondary/40", flashKeys.has(flashKey) && "flash-up")}
+                    >
+                      <TableCell>
+                        <div className="flex items-center gap-2.5">
+                          <span className="flex size-7 items-center justify-center rounded-full border font-mono text-[10px] text-muted-foreground">
+                            {a.symbol.slice(0, 1)}
+                          </span>
+                          <span className="font-mono text-sm font-semibold uppercase">{a.symbol}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <KindBadge kind={a.kind} />
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm font-semibold tabular">
+                        ${formatPrice(a.price)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm font-semibold tabular text-up">
+                        ${a.triggeredPrice != null ? formatPrice(a.triggeredPrice) : "—"}
+                      </TableCell>
+                      <TableCell className="hidden text-right font-mono text-xs tabular text-muted-foreground sm:table-cell">
+                        {a.triggeredAt != null ? formatDateTime(a.triggeredAt) : "—"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center justify-end gap-1">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                aria-label={t("al.rearmSr", { symbol: a.symbol })}
+                                onClick={() => rearm(a.id)}
+                                className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                              >
+                                <RotateCcw className="size-3.5" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent>{t("al.rearm")}</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                aria-label={t("al.deleteSr", { symbol: a.symbol })}
+                                onClick={() => {
+                                  if (deleteConfirm.confirm(a.id)) remove(a.id)
+                                }}
+                                className={cn(
+                                  "rounded p-1.5 transition-colors",
+                                  deleteConfirm.armed === a.id
+                                    ? "bg-down/15 text-down"
+                                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                                )}
+                              >
+                                <Trash2 className="size-3.5" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {deleteConfirm.armed === a.id ? t("pf.deleteConfirm") : t("common.delete")}
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           )}
         </CardContent>
       </Card>
 
-      <p className="fade-up flex items-center justify-center gap-1.5 text-center font-mono text-[10px] text-muted-foreground" style={{ animationDelay: "160ms" }}>
+      <p className="flex items-center justify-center gap-1.5 text-center font-mono text-[10px] text-muted-foreground">
         <ShieldCheck className="size-3 shrink-0" />
         {t("al.note")}
       </p>

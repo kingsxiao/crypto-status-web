@@ -240,6 +240,7 @@ export const zh = {
   "coin.opinionInsufficient": "多空观点数据不足",
   "coin.opinionInsufficientDesc": "需要至少 60 天日线数据，部分新上市币种可能无法计算",
   "coin.selectLabel": "选择币种",
+  "coin.shortcuts": "快捷键",
 
   /* K 线图读数条 */
   "candle.aria": "K线图",
@@ -252,6 +253,7 @@ export const zh = {
   "candle.boll.upper": "上",
   "candle.boll.mid": "中",
   "candle.boll.lower": "下",
+  "candle.zoomReset": "双击复位",
 
   /* ------------------------------ 情绪页 ------------------------------ */
   "page.sentiment.title": "市场情绪",
@@ -392,6 +394,8 @@ export const zh = {
   "cv.col.unitUsd": "1 单位 ≈ USD",
   "cv.col.per1000": "$1,000 ≈",
   "cv.disclaimer": "价格来自公开交易所实时行情，未包含任何交易手续费与滑点，结果仅供参考。",
+  "cv.swap": "互换方向",
+  "cv.dragHint": "拖动调整金额",
 
   /* ------------------------------ 关于页 ------------------------------ */
   "page.about.title": "关于",
@@ -664,6 +668,10 @@ export const zh = {
   "pf.noPrice": "暂无价格",
   "pf.alloc.title": "配置占比",
   "pf.alloc.desc": "按持仓市值加权",
+  "pf.csv.export": "导出 CSV",
+  "pf.csv.import": "导入 CSV",
+  "pf.csv.importOk": "已导入 {n} 笔持仓",
+  "pf.csv.importFail": "CSV 解析失败，未做更改",
 
   /* ------------------------------ 价格预警页 ------------------------------ */
   "page.alerts.title": "价格预警",
@@ -677,6 +685,7 @@ export const zh = {
   "al.create.invalid": "请输入大于 0 的目标价",
   "al.create.full": "已达 {n} 条上限，请先删除部分预警",
   "al.quick": "快捷目标",
+  "al.preset.round": "整数关口",
   "al.kind.above": "上穿",
   "al.kind.below": "下穿",
   "al.created.title": "预警已创建",
@@ -757,6 +766,8 @@ export const zh = {
   "ev.approxTip": "时刻为约数",
   "ev.ics": "添加到日历",
   "ev.locateNow": "定位现在",
+  "ev.showMore": "显示更多 · 剩 {n} 条",
+  "ev.showEarlier": "显示更早 · 剩 {n} 条",
   "ev.nextUp": "随后",
   "ev.remind.add": "提醒我",
   "ev.remind.cancel": "取消提醒",
@@ -791,6 +802,7 @@ export const zh = {
   "set.dom.alertsSub": "{active} 进行中 · {triggered} 已触发",
   "set.dom.reminders": "事件提醒",
   "set.count": "{n} 条",
+  "set.storage": "本地占用",
   "set.note":
     "导入会以备份文件覆盖本浏览器当前的四域数据；换设备或清缓存后，在新设备打开本页导入即可还原。",
 } as const

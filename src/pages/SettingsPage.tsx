@@ -1,7 +1,7 @@
 /**
- * 设置页 — 本地数据管理：四域（持仓/预警/自选/事件提醒）一键导出 JSON
- * 备份、导入还原与各域数据概览。数据唯一存于 localStorage，本页是
- * 唯一的「带走 / 找回」入口。
+ * 设置页 — 本地数据管理:四域(持仓/预警/自选/事件提醒)一键导出 JSON
+ * 备份、导入还原与各域数据概览(记录数 + localStorage 占用)。
+ * 数据唯一存于 localStorage,本页是唯一的「带走 / 找回」入口。
  */
 
 import { useRef, useState } from "react"
@@ -16,10 +16,13 @@ import {
 } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/PageHeader"
+import { SectionLabel } from "@/components/layout/SectionLabel"
+import { AnimatedNumber } from "@/components/ui/animated-number"
 import { pushToast } from "@/components/ui/toast"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHead, CardHeader } from "@/components/ui/card"
 import { IconChip } from "@/components/ui/icon-chip"
+import { StatStrip, type StatItem } from "@/components/ui/stat"
 import { t, useT } from "@/i18n"
 import { usePageMeta } from "@/hooks/usePageMeta"
 import { useFavorites } from "@/hooks/useFavorites"
@@ -27,7 +30,19 @@ import { useAlerts } from "@/lib/alerts"
 import { downloadBackup, importBackup } from "@/lib/backup"
 import { useEventReminders } from "@/lib/eventReminders"
 import { usePortfolio } from "@/lib/portfolio"
+import { STORAGE_KEYS, storageGet } from "@/lib/storage"
 import { cn } from "@/lib/utils"
+
+/** 各域 localStorage 占用:库内字符串长度(即 JSON.stringify 的字符数) */
+function bytesOf(key: string): number {
+  return storageGet(key)?.length ?? 0
+}
+
+function fmtBytes(n: number): string {
+  if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`
+  if (n >= 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${n} B`
+}
 
 export function SettingsPage() {
   useT()
@@ -35,7 +50,7 @@ export function SettingsPage() {
   const fileRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState<string | null>(null)
 
-  // 各域概览：直接消费各域 hook，导入派发的变更事件会即时反映到这里
+  // 各域概览:直接消费各域 hook,导入派发的变更事件会即时反映到这里
   const { favorites } = useFavorites()
   const { holdings } = usePortfolio()
   const { alerts } = useAlerts()
@@ -70,26 +85,44 @@ export function SettingsPage() {
         ttlMs: 6000,
       })
     } else {
-      // 结构非法：库未被动过，提示后继续用现有数据
+      // 结构非法:库未被动过,提示后继续用现有数据
       setError(t(result.error === "parse" ? "set.importFail.parse" : "set.importFail.shape"))
     }
     // 允许重复选择同一文件再次导入
     if (fileRef.current) fileRef.current.value = ""
   }
 
-  const domains = [
-    { icon: Star, label: t("set.dom.favorites"), value: t("set.count", { n: favorites.length }) },
-    { icon: Wallet, label: t("set.dom.portfolio"), value: t("set.count", { n: holdings.length }) },
+  /** 记录数读数:导入/删除后数值变化经 AnimatedNumber 播一次 rise */
+  const countValue = (n: number) => (
+    <AnimatedNumber value={n} format={(v) => t("set.count", { n: v })} />
+  )
+
+  const storageSub = (key: string) => `${t("set.storage")} ${fmtBytes(bytesOf(key))}`
+
+  const items: StatItem[] = [
+    {
+      icon: Star,
+      label: t("set.dom.favorites"),
+      value: countValue(favorites.length),
+      sub: storageSub(STORAGE_KEYS.favorites),
+    },
+    {
+      icon: Wallet,
+      label: t("set.dom.portfolio"),
+      value: countValue(holdings.length),
+      sub: storageSub(STORAGE_KEYS.portfolio),
+    },
     {
       icon: BellRing,
       label: t("set.dom.alerts"),
-      value: t("set.count", { n: alerts.length }),
-      sub: t("set.dom.alertsSub", { active: activeAlerts, triggered: triggeredAlerts }),
+      value: countValue(alerts.length),
+      sub: `${t("set.dom.alertsSub", { active: activeAlerts, triggered: triggeredAlerts })} · ${storageSub(STORAGE_KEYS.alerts)}`,
     },
     {
       icon: CalendarClock,
       label: t("set.dom.reminders"),
-      value: t("set.count", { n: Object.keys(reminders).length }),
+      value: countValue(Object.keys(reminders).length),
+      sub: storageSub(STORAGE_KEYS.eventReminders),
     },
   ]
 
@@ -98,7 +131,7 @@ export function SettingsPage() {
       <PageHeader en="Settings" title={t("page.settings.title")} description={t("page.settings.desc")} />
 
       {/* 备份与还原 */}
-      <Card className="fade-up">
+      <Card>
         <CardHeader>
           <CardHead
             title={
@@ -125,7 +158,7 @@ export function SettingsPage() {
                 <Upload className="size-4" /> {t("set.import")}
               </Button>
               <p className="text-xs leading-relaxed text-muted-foreground">{t("set.importHint")}</p>
-              {/* 隐藏文件选择器：按钮触发，保持动作区视觉统一 */}
+              {/* 隐藏文件选择器:按钮触发,保持动作区视觉统一 */}
               <input
                 ref={fileRef}
                 type="file"
@@ -140,29 +173,13 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* 各域数据概览 */}
-      <Card className="fade-up py-0" style={{ animationDelay: "60ms" }}>
-        <CardHeader>
-          <CardHead title={t("set.overview.title")} desc={t("set.overview.desc")} />
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 md:grid-cols-4 md:divide-x md:divide-border/60 md:py-0">
-          {domains.map(({ icon: Icon, label, value, sub }) => (
-            <div key={label} className="flex flex-col gap-1.5 px-5 py-5">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Icon className="size-3.5" />
-                <span className="font-mono text-[10px] font-semibold tracking-[0.18em] uppercase">{label}</span>
-              </div>
-              <span className="font-mono text-xl font-bold tabular">{value}</span>
-              {sub && <span className="font-mono text-[10px] text-muted-foreground tabular">{sub}</span>}
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      {/* 各域数据概览:记录数(变化时弹跳)+ 本地占用 */}
+      <section className="space-y-3">
+        <SectionLabel>{t("set.overview.title")}</SectionLabel>
+        <StatStrip items={items} />
+      </section>
 
-      <p
-        className="fade-up flex items-center justify-center gap-1.5 text-center font-mono text-[10px] text-muted-foreground"
-        style={{ animationDelay: "120ms" }}
-      >
+      <p className="flex items-center justify-center gap-1.5 text-center font-mono text-[10px] text-muted-foreground">
         <ShieldCheck className="size-3 shrink-0" />
         {t("set.note")}
       </p>

@@ -242,6 +242,7 @@ export const en = {
   "coin.opinionInsufficient": "Insufficient data for opinion",
   "coin.opinionInsufficientDesc": "At least 60 days of daily candles are required — some newly listed assets can't be scored",
   "coin.selectLabel": "Select asset",
+  "coin.shortcuts": "Shortcuts",
 
   /* Candle chart readout */
   "candle.aria": "Candlestick chart",
@@ -254,6 +255,7 @@ export const en = {
   "candle.boll.upper": "U",
   "candle.boll.mid": "M",
   "candle.boll.lower": "L",
+  "candle.zoomReset": "Double-click to reset",
 
   /* ------------------------------ Sentiment page ------------------------------ */
   "page.sentiment.title": "Market Sentiment",
@@ -395,6 +397,8 @@ export const en = {
   "cv.col.unitUsd": "1 unit ≈ USD",
   "cv.col.per1000": "$1,000 ≈",
   "cv.disclaimer": "Prices come from public exchange feeds with no fees or slippage included — results are for reference only.",
+  "cv.swap": "Swap sides",
+  "cv.dragHint": "Drag to adjust",
 
   /* ------------------------------ About page ------------------------------ */
   "page.about.title": "About",
@@ -667,6 +671,10 @@ export const en = {
   "pf.noPrice": "No price yet",
   "pf.alloc.title": "Allocation",
   "pf.alloc.desc": "Weighted by holding value",
+  "pf.csv.export": "Export CSV",
+  "pf.csv.import": "Import CSV",
+  "pf.csv.importOk": "Imported {n} holdings",
+  "pf.csv.importFail": "CSV parse failed, nothing changed",
 
   /* ------------------------------ Price alerts page ------------------------------ */
   "page.alerts.title": "Price Alerts",
@@ -680,6 +688,7 @@ export const en = {
   "al.create.invalid": "Enter a target price greater than 0",
   "al.create.full": "Limit of {n} alerts reached — remove some first",
   "al.quick": "Quick targets",
+  "al.preset.round": "Round number",
   "al.kind.above": "Crosses above",
   "al.kind.below": "Falls below",
   "al.created.title": "Alert created",
@@ -760,6 +769,8 @@ export const en = {
   "ev.approxTip": "approximate time",
   "ev.ics": "Add to calendar",
   "ev.locateNow": "Jump to now",
+  "ev.showMore": "Show more · {n} left",
+  "ev.showEarlier": "Show earlier · {n} left",
   "ev.nextUp": "Then",
   "ev.remind.add": "Remind me",
   "ev.remind.cancel": "Cancel reminder",
@@ -794,6 +805,7 @@ export const en = {
   "set.dom.alertsSub": "{active} active · {triggered} triggered",
   "set.dom.reminders": "Event reminders",
   "set.count": "{n} items",
+  "set.storage": "Local storage",
   "set.note":
     "Importing overwrites the four domains currently in this browser with the backup file; to migrate devices, open this page on the new device and import.",
 } satisfies Record<MessageKey, string>

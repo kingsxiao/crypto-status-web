@@ -1,13 +1,14 @@
-import { Fragment, useMemo, useState } from "react"
-import { Bitcoin, CalendarClock, Crosshair, Landmark } from "lucide-react"
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Bitcoin, CalendarClock, ChevronDown, ChevronUp, Crosshair, Landmark } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/PageHeader"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHead } from "@/components/ui/card"
 import { Segmented } from "@/components/ui/segmented"
 import { useLive, useMarket } from "@/context/MarketDataContext"
 import { useNow } from "@/hooks/useNow"
 import { usePageMeta } from "@/hooks/usePageMeta"
+import { useReveal } from "@/hooks/useReveal"
 import { dateLocale, t, useLocale, useT } from "@/i18n"
 import { requestNotifyPermission, notifyPermission, notifySupported } from "@/lib/alerts"
 import {
@@ -27,7 +28,10 @@ import { useEventReminders } from "@/lib/eventReminders"
 
 import { EventRow } from "./events/EventRow"
 import { HeroCard } from "./events/HeroCard"
-import { NowDivider } from "./events/widgets"
+import { NowDivider, TimelineRail } from "./events/widgets"
+
+/** 折叠窗口步长：首屏只渲染 NOW 锚点两侧（或列表头部）各 N 条，「显示更多」每次放宽 N 条 */
+const VISIBLE_STEP = 20
 
 /* ------------------------------ 页面 ------------------------------ */
 
@@ -65,12 +69,29 @@ export function EventsPage() {
   const [statusF, setStatusF] = useState<StatusFilter>("all")
   const [catF, setCatF] = useState<CategoryFilter>("all")
   const [openId, setOpenId] = useState<string | null>(null)
+  // 折叠窗口宽度（可见条数上限）：NOW 锚点向前（更早的已结束）/向后（更远的
+  // 未结束）各一档；切筛选/类别时回到初始窗口
+  const [earlierLimit, setEarlierLimit] = useState(VISIBLE_STEP)
+  const [laterLimit, setLaterLimit] = useState(VISIBLE_STEP)
+  // 日组粒度滚动显现（无 JS / reduced-motion 时内容直接可见）。
+  // useReveal 返回回调 ref（异步挂载时序驱动观察器建立）；TimelineRail 需要
+  // RefObject 量高，两个职责在同一次挂载回调里合并写入
+  const revealRef = useReveal<HTMLUListElement>()
+  const railRootRef = useRef<HTMLUListElement | null>(null)
+  const listRef = useCallback((el: HTMLUListElement | null) => {
+    railRootRef.current = el
+    revealRef(el)
+  }, [revealRef])
 
   const tz = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone ?? "—", [])
   usePageMeta({ title: t("meta.events"), description: t("page.events.desc", { tz }) })
 
   const filtered = useMemo(() => filterEvents(MARKET_EVENTS, now, statusF, catF), [now, statusF, catF])
-  const groups = useMemo(() => groupEventsByDay(filtered), [filtered])
+  // 切筛选/类别回到初始窗口（不同列表的折叠量不可比）
+  useEffect(() => {
+    setEarlierLimit(VISIBLE_STEP)
+    setLaterLimit(VISIBLE_STEP)
+  }, [statusF, catF])
   const hero = useMemo(() => heroEvent(MARKET_EVENTS, now), [now])
   // 「随后」预告：英雄卡之外最近的未结束事件
   const after = useMemo(
@@ -100,9 +121,34 @@ export function EventsPage() {
 
   // 「全部」视图的 NOW 分隔线锚点：首条未结束事件之前；全部已结束时放在列表末尾
   let markerId: string | null = null
+  let markerIdx = 0
   if (statusF === "all") {
-    markerId = filtered.find((e) => eventStatus(e, now) !== "finished")?.id ?? "__end__"
+    const idx = filtered.findIndex((e) => eventStatus(e, now) !== "finished")
+    markerIdx = idx === -1 ? filtered.length : idx
+    markerId = idx === -1 ? "__end__" : filtered[idx].id
   }
+
+  /* 折叠窗口（长清单首屏只渲染关键部分，避免百余行全量平铺约 20 屏）：
+   *  - 「全部」视图（升序，NOW 锚点前全是已结束）：首屏只渲染锚点两侧各
+   *    VISIBLE_STEP 条（最近已结束 + 即将到来），NOW 分隔线与「定位现在」
+   *    始终可见——更早的折叠在顶部、更远的折叠在底部，各自「显示更多」；
+   *  - 其余视图（upcoming/live 升序取最紧的在前、finished 降序取最新在前）：
+   *    只留前 laterLimit 条——截尾，按钮放列表底部。 */
+  const { shown, hiddenBefore, hiddenAfter } = useMemo(() => {
+    if (statusF === "all") {
+      const start = Math.max(0, markerIdx - earlierLimit)
+      const end = Math.min(filtered.length, markerIdx + laterLimit)
+      return {
+        shown: filtered.slice(start, end),
+        hiddenBefore: start,
+        hiddenAfter: filtered.length - end,
+      }
+    }
+    const end = Math.min(filtered.length, laterLimit)
+    return { shown: filtered.slice(0, end), hiddenBefore: 0, hiddenAfter: filtered.length - end }
+  }, [filtered, statusF, markerIdx, earlierLimit, laterLimit])
+
+  const groups = useMemo(() => groupEventsByDay(shown), [shown])
 
   const toggleReminder = (id: string) => {
     const on = toggle(id)
@@ -166,28 +212,25 @@ export function EventsPage() {
 
       {hero && <HeroCard event={hero} after={after} now={now} locale={locale} btc={btc} />}
 
-      <Card className="fade-up" style={{ animationDelay: "60ms" }}>
-        <CardContent>
-          <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
-            <h2 className="text-[15px] font-semibold tracking-tight">{t("ev.timeline.title")}</h2>
-            <div className="flex items-center gap-3">
-              <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
-                {t("ev.timeline.count", { n: filtered.length })} ·{" "}
-                {t(statusF === "finished" ? "ev.order.desc" : "ev.order.asc")}
-              </span>
-              {statusF === "all" && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 gap-1 rounded-full px-2.5 font-mono text-[10px]"
-                  onClick={locateNow}
-                >
-                  <Crosshair className="size-3" />
-                  {t("ev.locateNow")}
-                </Button>
-              )}
-            </div>
-          </div>
+      <Card>
+        <CardContent className="space-y-1">
+          <CardHead title={t("ev.timeline.title")}>
+            <span className="type-label text-muted-foreground">
+              {t("ev.timeline.count", { n: filtered.length })} ·{" "}
+              {t(statusF === "finished" ? "ev.order.desc" : "ev.order.asc")}
+            </span>
+            {statusF === "all" && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1 rounded-full px-2.5 font-mono text-[10px]"
+                onClick={locateNow}
+              >
+                <Crosshair className="size-3" />
+                {t("ev.locateNow")}
+              </Button>
+            )}
+          </CardHead>
 
           {filtered.length === 0 ? (
             <div className="flex h-32 flex-col items-center justify-center gap-1.5 text-center">
@@ -205,17 +248,31 @@ export function EventsPage() {
               </p>
             </div>
           ) : (
-            <ul>
+            <ul ref={listRef} className="relative">
+              {/* 贯穿全时间线的生长轨道：灰线打底，primary 线随滚动生长，节点盖线之上 */}
+              <TimelineRail containerRef={railRootRef} />
+              {hiddenBefore > 0 && (
+                /* 更早的已结束事件折叠在顶部（「全部」视图截头侧） */
+                <li className="flex justify-center py-2.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 gap-1.5 rounded-full px-4 font-mono text-[11px]"
+                    onClick={() => setEarlierLimit((n) => n + VISIBLE_STEP)}
+                  >
+                    <ChevronUp className="size-3.5" />
+                    {t("ev.showEarlier", { n: hiddenBefore })}
+                  </Button>
+                </li>
+              )}
               {groups.map((g, gi) => (
-                <li key={g.dayKey}>
+                <li key={g.dayKey} data-reveal>
                   {/* 粘性日头：长列表滚动时贴在顶栏下沿 */}
                   <div className="sticky top-16 z-10 -mx-1 flex items-center gap-3 bg-background/95 px-1 py-1.5 backdrop-blur-sm">
                     <span className="font-mono text-[11px] font-semibold tracking-wider">{dayLabel(g.dayKey, now)}</span>
                     <span className="h-px flex-1 bg-border/60" aria-hidden />
                   </div>
-                  <ul className="relative">
-                    {/* 轨道竖线：日组内贯穿，节点盖在其上 */}
-                    <span aria-hidden className="absolute bottom-2 left-3 top-2 w-px bg-border/60" />
+                  <ul>
                     {g.events.map((e) => (
                       <Fragment key={e.id}>
                         {markerId === e.id && <NowDivider />}
@@ -234,15 +291,26 @@ export function EventsPage() {
                   </ul>
                 </li>
               ))}
+              {hiddenAfter > 0 && (
+                /* 更远的未结束/更旧的事件折叠在底部（截尾侧） */
+                <li className="flex justify-center py-2.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 gap-1.5 rounded-full px-4 font-mono text-[11px]"
+                    onClick={() => setLaterLimit((n) => n + VISIBLE_STEP)}
+                  >
+                    <ChevronDown className="size-3.5" />
+                    {t("ev.showMore", { n: hiddenAfter })}
+                  </Button>
+                </li>
+              )}
             </ul>
           )}
         </CardContent>
       </Card>
 
-      <p
-        className="fade-up flex items-start justify-center gap-1.5 text-center font-mono text-[10px] leading-relaxed text-muted-foreground"
-        style={{ animationDelay: "120ms" }}
-      >
+      <p className="flex items-start justify-center gap-1.5 text-center font-mono text-[10px] leading-relaxed text-muted-foreground">
         {t("ev.note")}
       </p>
     </main>

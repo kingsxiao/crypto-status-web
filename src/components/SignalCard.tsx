@@ -1,6 +1,7 @@
-import { memo } from "react"
+import { memo, type CSSProperties } from "react"
 import { Activity } from "lucide-react"
 
+import { AnimatedNumber } from "@/components/ui/animated-number"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardKicker } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
@@ -38,14 +39,18 @@ export const SignalCard = memo(function SignalCard({ analysis }: { analysis: Ana
       </CardHeader>
 
       <CardContent className="flex flex-col items-center gap-4">
+        {/* 挂载编排：指针由 0 摆到综合分（Gauge 内建 450ms 过渡），
+            综合分同步 num-rise 入场，其后的实时重算走涨跌方向动效 */}
         <SignalGauge score={composite} className="text-primary -mt-1" />
 
         <div className="flex flex-col items-center gap-1.5">
           <div className="flex items-baseline gap-2">
-            <span className="font-mono text-4xl font-bold tabular tracking-tight">
-              {composite > 0 ? "+" : ""}
-              {composite}
-            </span>
+            <AnimatedNumber
+              value={composite}
+              animateOnMount
+              format={(v) => `${v > 0 ? "+" : ""}${v}`}
+              className="type-num-xl"
+            />
           </div>
           <Badge
             variant="outline"
@@ -58,21 +63,25 @@ export const SignalCard = memo(function SignalCard({ analysis }: { analysis: Ana
         <Separator className="w-full" />
 
         <div className="flex w-full items-center justify-between text-xs">
-          <span className="flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-up" />
-            <span className="font-mono font-semibold">{bulls}</span>
-            <span className="text-muted-foreground">{t("sig.count.bull")}</span>
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-primary/30" />
-            <span className="font-mono font-semibold">{neutrals}</span>
-            <span className="text-muted-foreground">{t("sig.count.neutral")}</span>
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-down" />
-            <span className="font-mono font-semibold">{bears}</span>
-            <span className="text-muted-foreground">{t("sig.count.bear")}</span>
-          </span>
+          {/* 三档计数 pop 入场：多/中性/空依序弹出（240ms 起步，60ms/步，
+              等指针与读数先落位；.count-pop 见 pages/dashboard.css） */}
+          {(
+            [
+              { n: bulls, cls: "bg-up", key: "sig.count.bull" as const },
+              { n: neutrals, cls: "bg-primary/30", key: "sig.count.neutral" as const },
+              { n: bears, cls: "bg-down", key: "sig.count.bear" as const },
+            ]
+          ).map((it, i) => (
+            <span
+              key={it.key}
+              className="count-pop flex items-center gap-1.5"
+              style={{ "--pop-delay": "240ms", "--i": i } as CSSProperties}
+            >
+              <span className={`size-2 rounded-full ${it.cls}`} />
+              <span className="type-num">{it.n}</span>
+              <span className="text-muted-foreground">{t(it.key)}</span>
+            </span>
+          ))}
         </div>
       </CardContent>
     </Card>

@@ -1,19 +1,22 @@
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { ArrowDown, ArrowUp, ArrowUpDown, Bell, ChevronRight, Search, Star } from "lucide-react"
+import { ArrowUp, ArrowUpDown, Bell, ChevronRight, Search, Star } from "lucide-react"
 
 import { AssetCell, LivePrice, Pct } from "@/components/price-cells"
 import { Sparkline } from "@/components/Sparkline"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { TableSkeleton } from "@/components/loading"
 import { Card, CardContent } from "@/components/ui/card"
+import { Kbd } from "@/components/ui/kbd"
 import { Input } from "@/components/ui/input"
 import { Segmented } from "@/components/ui/segmented"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useLive, useMarket } from "@/context/MarketDataContext"
 import { t, useT } from "@/i18n"
 import { useFavorites } from "@/hooks/useFavorites"
+import { useSlashFocus } from "@/hooks/useHotkey"
 import { usePageMeta } from "@/hooks/usePageMeta"
+import { useRowNav } from "@/hooks/useRowNav"
 import { STABLECOIN_IDS, type Coin } from "@/lib/api"
 import { formatPct, formatPrice, formatUsdCompact } from "@/lib/format"
 import { TRADE_SYMBOLS } from "@/lib/realtime"
@@ -72,18 +75,37 @@ function SortHead({
   onSort: (k: SortKey) => void
   className?: string
 }) {
-  const Icon = active ? (dir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown
+  // 激活时同枚 ArrowUp 翻转 180° 表降序：升降切换不换图标，rotate 160ms 连续可感
+  const Icon = active ? ArrowUp : ArrowUpDown
   return (
-    <TableHead className={className}>
+    <TableHead
+      className={className}
+      aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : undefined}
+    >
       <button
         className={cn(
-          "inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider transition-colors",
+          "relative inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider transition-colors",
           active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
         )}
         onClick={() => onSort(sortKey)}
       >
         {label}
-        <Icon className={cn("size-3", !active && "opacity-40")} />
+        <Icon
+          aria-hidden
+          className={cn(
+            "size-3 transition-transform duration-[160ms] [transition-timing-function:var(--ease-soft)]",
+            !active && "opacity-40",
+            active && dir === "desc" && "rotate-180"
+          )}
+        />
+        {/* 激活列 primary 下划线：scaleX 自左生长（160ms 微反馈档） */}
+        <span
+          aria-hidden
+          className={cn(
+            "absolute inset-x-0 -bottom-0.5 h-px origin-left bg-primary transition-transform duration-[160ms] [transition-timing-function:var(--ease-soft)]",
+            active ? "scale-x-100" : "scale-x-0"
+          )}
+        />
       </button>
     </TableHead>
   )
@@ -119,6 +141,10 @@ export function MarketsPage() {
   const [scope, setScope] = useState<"all" | "tradeable" | "favorites">("all")
   const [sortKey, setSortKey] = useState<SortKey>("rank")
   const [sortDir, setSortDir] = useState<SortDir>("asc")
+
+  // '/' 聚焦搜索（基础层 useSlashFocus：输入态自动豁免）
+  const searchRef = useRef<HTMLInputElement>(null)
+  useSlashFocus(searchRef)
 
   const coins = useMemo(() => snapshot?.coins ?? [], [snapshot])
 
@@ -159,6 +185,17 @@ export function MarketsPage() {
     }
   }
 
+  // 键盘行导航（基础层 useRowNav）：只索引可进详情的行（有交易对），
+  // ↑↓/Home/End 移动、Enter/Space 激活；焦点落在行内控件（星标/铃铛）时不劫持
+  const navRows = useMemo(() => rows.filter((c) => !!TRADE_SYMBOLS[c.id]), [rows])
+  const nav = useRowNav({
+    count: navRows.length,
+    onActivate: (i) => {
+      const c = navRows[i]
+      if (c) navigate(`/coin/${c.id}`)
+    },
+  })
+
   // 市场广度：24h 涨跌家数（剔稳定币）
   const breadth = useMemo(() => {
     const pcts = coins
@@ -194,11 +231,16 @@ export function MarketsPage() {
         <div className="relative">
           <Search className="absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
+            ref={searchRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t("markets.search")}
-            className="h-8 w-44 pl-8 font-mono text-xs"
+            className="peer h-8 w-44 pr-7 pl-8 font-mono text-xs"
           />
+          {/* 「/」直达提示：聚焦即隐（peer-focus），纯键位符号非文案 */}
+          <span aria-hidden className="absolute top-1/2 right-2 -translate-y-1/2 peer-focus:opacity-0">
+            <Kbd>/</Kbd>
+          </span>
         </div>
         <Segmented
           label={t("common.scopeLabel")}
@@ -212,15 +254,15 @@ export function MarketsPage() {
         />
       </PageHeader>
 
-      {/* 行情表 */}
+      {/* 行情表（整页入场由 route-fade 承担，卡片不再 fade-up） */}
       {loading && !snapshot ? (
-      <Card className="fade-up">
+      <Card>
         <CardContent className="px-6 py-4">
           <TableSkeleton rows={10} showSparkline />
         </CardContent>
       </Card>
       ) : (
-      <Card className="fade-up">
+      <Card>
         <CardContent>
           {rows.length === 0 ? (
             <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
@@ -265,7 +307,7 @@ export function MarketsPage() {
                   </TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody onKeyDown={nav.onKeyDown}>
                 {rows.map((c) => {
                   const tk = tickers[c.id]
                   const price = tk?.price ?? c.current_price
@@ -277,15 +319,12 @@ export function MarketsPage() {
                     <TableRow
                       key={c.id}
                       onClick={() => hasDetail && navigate(`/coin/${c.id}`)}
-                      onPointerEnter={() => hasDetail && prefetchRoute(`/coin/${c.id}`)}
-                      tabIndex={hasDetail ? 0 : undefined}
-                      onKeyDown={(e) => {
-                        if (hasDetail && (e.key === "Enter" || e.key === " ")) {
-                          e.preventDefault()
-                          navigate(`/coin/${c.id}`)
-                        }
+                      onPointerEnter={() => {
+                        if (hasDetail) prefetchRoute(`/coin/${c.id}`)
                       }}
+                      {...(hasDetail ? { "data-row-nav-row": true, tabIndex: 0 } : {})}
                       className={cn(
+                        "group",
                         hasDetail && "row-link",
                         hasDetail ? "cursor-pointer" : "cursor-default opacity-80",
                         hasDetail && "hover:bg-secondary/60 focus-visible:bg-secondary/60 focus-visible:outline-none"
@@ -327,10 +366,10 @@ export function MarketsPage() {
                         </span>
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
-                        <div
-                          className={`ml-auto w-fit ${chg7 >= 0 ? "text-up" : "text-down"}`}
-                        >
-                          <Sparkline data={spark} width={120} height={34} />
+                        {/* 悬停点亮火花线端点走行级 group + Sparkline 内部
+                            group-hover（纯 CSS），不再用行级 state 驱动整表重渲染 */}
+                        <div className={`ml-auto w-fit ${chg7 >= 0 ? "text-up" : "text-down"}`}>
+                          <Sparkline data={spark} width={120} height={34} showDot />
                         </div>
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">

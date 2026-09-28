@@ -175,6 +175,209 @@ html[data-theme="violet"] {
   font-variant-numeric: tabular-nums;
 }
 
+/* =====================================================================
+ * 墨线终端 · 字阶系统（基础层交付，全站不得自创新档）
+ *
+ * 8 档封顶：kicker / label / meta / body / title / num / num-lg / num-xl
+ * (+ hero 专用 .type-display，每页至多一处)。
+ * 放在 @layer components：调用处叠加的 Tailwind utility（如 text-5xl /
+ * text-foreground）位于 utilities 层，可按需覆盖档位默认值 —— 字阶是默认
+ * 约定而非硬约束，例外处仍可用 utility 微调。
+ * ===================================================================== */
+@layer components {
+  /* 眉题：纯排版 utility，不含颜色 —— 颜色由调用处指定：
+     常规眉题 text-muted-foreground；PageHeader 页眉题 text-primary（刻意保留的全局强调点） */
+  .type-kicker {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.25em;
+    line-height: 1;
+  }
+  /* 标签：表头、字段名、角标 */
+  .type-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    line-height: 1;
+  }
+  /* 辅注：时间、来源、口径（颜色是语义的一部分，默认弱化） */
+  .type-meta {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--muted-foreground);
+  }
+  /* 正文：13px；说明文字调用处叠 text-xs(12px) */
+  .type-body {
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  /* 卡题：CardHead 主标题 */
+  .type-title {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.4;
+  }
+  /* 表格数字：一切价格/百分比/得分/倒计时必须用 */
+  .type-num {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  /* KPI 读数：统计条分格内的主数字 */
+  .type-num-lg {
+    font-family: var(--font-mono);
+    font-size: 1.25rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+  }
+  /* 卡内主读数：默认 text-4xl 档，卡内更大读数叠 text-5xl 覆盖 */
+  .type-num-xl {
+    font-family: var(--font-mono);
+    font-size: 2.25rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+  }
+  /* hero 读数：每页至多一处；情绪页 hero 是全站唯一常驻使用点
+     （e2e 以 main span.text-7xl 单数匹配锚定，调用处必须保留 text-7xl 类） */
+  .type-display {
+    font-family: var(--font-mono);
+    font-size: 4.5rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+}
+
+/* =====================================================================
+ * 墨线终端 · 全局动效机制（基础层交付，分区引用，不得自建重复品）
+ *
+ * 三档时长：120-160ms 微反馈 / 350-450ms 状态切换 / 700-900ms 数据动画。
+ * 统一缓动 --ease-soft；linear 仅用于进度推进（.w-anim）。
+ * 入场动效不叠加：整页入场由 route-fade 承担（分区删除首屏容器上的
+ * fade-up）；滚动后内容用 .reveal；卡片内部子元素用 .stagger。
+ * ===================================================================== */
+:root {
+  --ease-soft: cubic-bezier(0.21, 1, 0.33, 1);
+}
+
+/* 路由切换淡入：App.tsx 以 pathname 首段为 key 的容器挂载本类
+ * （/coin/a → /coin/b 只换 param 不重挂、不播淡入） */
+@keyframes route-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.route-fade {
+  animation: route-fade-in 0.35s var(--ease-soft) both;
+}
+
+/* 卡片子元素入场阶差：60ms/步，第 8 步封顶（更后的子元素与第 8 档齐步） */
+@keyframes stagger-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.stagger > * {
+  animation: stagger-in 0.45s var(--ease-soft) both;
+  animation-delay: 420ms;
+}
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 60ms; }
+.stagger > *:nth-child(3) { animation-delay: 120ms; }
+.stagger > *:nth-child(4) { animation-delay: 180ms; }
+.stagger > *:nth-child(5) { animation-delay: 240ms; }
+.stagger > *:nth-child(6) { animation-delay: 300ms; }
+.stagger > *:nth-child(7) { animation-delay: 360ms; }
+.stagger > *:nth-child(8) { animation-delay: 420ms; }
+
+/* 滚动显现：初始态由 useReveal 挂 .reveal（无 JS / 测试环境不挂类，
+ * 内容照常可见），进入视口后挂 .is-visible，一次性显现后断开观察 */
+.reveal {
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 0.45s var(--ease-soft),
+    transform 0.45s var(--ease-soft);
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 数字读数一次性动效（AnimatedNumber final-text 模式）：
+ * DOM 文本恒为终值，动画只做 translateY(±4px)+fade 的视觉层 */
+@keyframes num-rise {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes num-fall {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.num-rise { animation: num-rise 0.7s var(--ease-soft); }
+.num-fall { animation: num-fall 0.7s var(--ease-soft); }
+
+/* 火花线描线进场（Sparkline，配 pathLength=1 归一化）：900ms 一次性 */
+@keyframes spark-draw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+.spark-draw {
+  stroke-dasharray: 1;
+  animation: spark-draw 0.9s var(--ease-soft) both;
+}
+
+/* 进度/占比类的 width 推进统一 700ms（linear：进度推进专用缓动） */
+.w-anim {
+  transition: width 0.7s linear;
+}
+
+/* Header 桌面导航：激活项 2px primary 下划线自左生长（160ms）。
+ * NavLink 激活时自带 aria-current="page"，纯 CSS 即可命中 */
+.nav-underline {
+  position: relative;
+}
+.nav-underline::after {
+  content: "";
+  position: absolute;
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--primary);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.16s var(--ease-soft);
+}
+.nav-underline[aria-current="page"]::after {
+  transform: scaleX(1);
+}
+
+/* 主题切换平滑：useTheme 切换时临时挂 html.theme-anim，300ms 后移除。
+ * 已知行为：该窗口内会以 !important 临时覆盖 .card-hover 等元素的
+ * transition-property（只过渡颜色类属性）——窗口极短，可接受；
+ * prefers-reduced-motion 下由文件末尾的 kill 块接管：kill 用 html:root 前缀
+ * 把特异性抬到与本块同档（同为 0,1,x 级），同为 author !important 时先比特异性
+ * 再比顺序——同档后 kill 靠更晚的源码顺序胜出，减少动态偏好仍然优先 */
+html.theme-anim,
+html.theme-anim *,
+html.theme-anim *::before,
+html.theme-anim *::after {
+  transition-property: background-color, border-color, color, fill, stroke !important;
+  transition-duration: 0.25s !important;
+  transition-timing-function: ease !important;
+  transition-delay: 0s !important;
+}
+
 /* 可交互卡片：hover 边框提亮 + 柔和投影（不做位移，避免内部绝对定位元素错位） */
 .card-hover {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -321,14 +524,21 @@ tr.row-link:focus-visible > td:first-child::before {
   background: var(--muted-foreground);
 }
 
-/* 尊重系统"减少动态效果"偏好（前庭障碍/低功耗场景） */
+/* 尊重系统"减少动态效果"偏好（前庭障碍/低功耗场景）。
+ * 选择器带 html:root 前缀：同为 author !important 时先比特异性再比顺序，
+ * 裸 * (0,0,0) 压不过 html.theme-anim * (0,1,1)——前缀把 kill 抬到同档，
+ * 再靠本块更晚的源码顺序胜出（含 theme-anim 窗口）。
+ * delay 必须一并清零：.stagger / .count-pop / 情绪柱等带 fill both + delay，
+ * 只清 duration 会在延迟窗口内保持 opacity:0/scaleY(0) 不可见 */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  html:root *,
+  html:root *::before,
+  html:root *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
     transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
     scroll-behavior: auto !important;
   }
 }
