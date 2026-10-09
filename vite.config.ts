@@ -99,6 +99,18 @@ export default defineConfig({
     modulePreload: { polyfill: false },
     rollupOptions: {
       output: {
+        // shaders(WebGPU 视觉库 ~700KB gz)只进按需异步 chunk，绝不进主包：
+        // 其模块名 dist/react/index.js 会让 chunk 名落为 index-*.js —— 与入口同名，
+        // 被 PWA precache 的 globPatterns assets/index-*.js 误收编（>2MiB 时还会炸
+        // workbox 构建）。故按 chunk 内模块来源把 shaders/typegpu 隔离到 assets/chunks/：
+        // 不匹配 precache glob（首访安装量零增量），仍匹配上方 SWR 的 /\/assets\/.+\.(js|css)/
+        // （二访起按需缓存、离线可用）。
+        chunkFileNames(chunk) {
+          const isShaderChunk = (chunk.moduleIds ?? []).some((id) =>
+            /[\\/]node_modules[\\/](shaders|typegpu)[\\/]/.test(id),
+          )
+          return isShaderChunk ? "assets/chunks/[name]-[hash].js" : "assets/[name]-[hash].js"
+        },
         // vendor 单独成 chunk：页面迭代时 vendor 缓存不失效。
         // 必须用函数形式按模块 id 归组 —— 对象形式的包名解析不带头部
         // production 条件，会把 react-router 的 development 构建拉进产物。

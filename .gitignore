@@ -26,3 +26,6 @@ test-results/
 # logs
 *.log
 npm-debug.log*
+
+# visual smoke screenshots（工作流验证产物）
+out/

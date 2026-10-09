@@ -19,6 +19,7 @@ import { ToastHost } from "@/components/ui/toast"
 import { MarketDataProvider } from "@/context/MarketDataContext"
 import { prefetchOnIdle } from "@/lib/routePrefetch"
 import { DashboardPage } from "@/pages/DashboardPage"
+import { CursorTrailFx, HeroShaderBackdrop } from "@/components/shader/SiteFx"
 
 // 总览页是落地页保持同步加载（首屏直达）；其余页面按路由懒加载
 const MarketsPage = lazy(() => import("@/pages/MarketsPage").then((m) => ({ default: m.MarketsPage })))
@@ -103,8 +104,8 @@ export default function App() {
     <HashRouter>
       <MarketDataProvider>
         <div className="relative flex min-h-screen flex-col bg-background">
-          {/* 顶部网格背景 */}
-          <div className="grid-backdrop pointer-events-none absolute inset-x-0 top-0 h-[420px]" aria-hidden />
+          {/* 顶部背景:WebGPU 可用时为 MeshGradient 动态渐变,降级保持 grid-backdrop 网格 */}
+          <HeroShaderBackdrop />
 
           <Header />
           <ScrollToTop />
@@ -129,6 +130,9 @@ export default function App() {
           </RouteFade>
 
           <Footer />
+
+          {/* 全局鼠标拖尾(装饰层,pointer-events-none;降级时不存在) */}
+          <CursorTrailFx />
           <BackToTop />
 
           {/* 预警触发引擎与事件提醒引擎（无头）+ 全局 toast 容器 */}
