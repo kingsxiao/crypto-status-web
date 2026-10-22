@@ -1,0 +1,6 @@
+{
+  "name": "@repo/config-ts",
+  "version": "0.0.0",
+  "private": true,
+  "files": ["base.json", "web.json", "natural-esm.json", "native.json"]
+}

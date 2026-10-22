@@ -29,3 +29,9 @@ npm-debug.log*
 
 # visual smoke screenshots（工作流验证产物）
 out/
+
+# expo 本地状态（机器相关，不入库）
+.expo/
+
+# Expo Go 本地安装包（143MB，不入库）
+expo-go.tar.gz

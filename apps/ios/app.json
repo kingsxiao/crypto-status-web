@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "CRYPTO STATUS",
+    "slug": "crypto-status-ios",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "crypto-status",
+    "userInterfaceStyle": "dark",
+    "icon": "./assets/icon.png",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.kingsxiao.crypto-status",
+      "infoPlist": {
+        "UIBackgroundModes": []
+      }
+    },
+    "android": {
+      "package": "com.kingsxiao.cryptostatus"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-notifications",
+        {
+          "color": "#171717"
+        }
+      ],
+      "expo-status-bar",
+      "expo-font",
+      "expo-sharing",
+      "expo-web-browser",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#171717"
+        }
+      ],
+      "expo-localization"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "cgDemoKey": ""
+    }
+  }
+}

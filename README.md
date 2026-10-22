@@ -2,6 +2,47 @@
 
 黑白极简风格（可切换主题色）的多页面加密货币市场观察应用：WebSocket 实时价格、牛熊周期判定、多指标合成的看多/看空信号、市场情绪分析、行情排序筛选与自选、实时换算器，以及带多指标工具的K线详情页。
 
+## Monorepo 结构（2026-10 迁移）
+
+本仓为 npm workspaces monorepo（架构蓝图与迁移记录见 `docs/ARCHITECTURE.md`）：
+
+```
+apps/
+  web/   @repo/web   现有 Vite 应用（构建链不动，行为与路由不变）
+  ios/   @repo/ios   Expo SDK 57 + expo-router（五席 Tabs + Stack 详情）
+packages/
+  core/          纯 TS 零外部依赖：领域模型/引擎/i18n/storageBus（九键+异步后端
+                 语义）/双通道事件端口/backup/theme store(THEME_COLORS)
+  data/          取数层零 react：http/cg(configureCG)/api/kline/realtime-source/
+                 crossAsset(fetch)；WebSocket/fetch 用全局原生实现
+  react/         共享 hooks 与 context：MarketData/useRealtime/useFavorites/
+                 useAlerts/usePortfolio/useEventReminders/useTwoStepConfirm/i18n·theme 绑定
+  platform/      native 子路径 installNativeRuntime 单点（AsyncStorage 后端 +
+                 进程内事件桥 + 水合 promise）；只许 apps/* import
+  ui-tokens/     RN 三主题色板（每主题完整 chart-1..5/radius 档/字体栈），
+                 以 apps/web/src/index.css 为唯一事实源，对齐测试锁死
+  config-ts/     共享 tsconfig 基座（base/web/natural-esm/native）
+  config-eslint/ eslint 基座 + ignores + 包边界矩阵（apps→packages 单向、
+                 core 零依赖、packages 禁 import.meta.env 与裸 window/document）
+```
+
+根聚合脚本（恰好六条）：
+
+| 命令 | 作用 |
+| --- | --- |
+| `npm run dev` | web 开发服务器 |
+| `npm run build` | 各 workspace 构建（当前 @repo/web） |
+| `npm run lint` | 全仓单次 eslint（apps + packages，边界矩阵生效） |
+| `npm run typecheck` | 各 workspace tsc |
+| `npm run test` | 各 workspace vitest（跨段求和核对基线见 docs/migration-baseline.md） |
+| `npm run test:e2e` | Playwright 冒烟（apps/web） |
+
+主题三契约（`apps/web/src/index.css` / `@repo/core` THEME_COLORS / `index.html`
+首帧内联脚本）与 RN 色板由对齐测试锁死：改任何一处必跑 `npm run test`。
+
+iOS：`cd apps/ios && npm run export`（Hermes 产物）/ `npx expo-doctor`；
+原生构建走 EAS 云（本地无 CocoaPods），配置见 `apps/ios/eas.json`。
+
 ## 技术栈
 
 - **React 19 + TypeScript + Vite 7**

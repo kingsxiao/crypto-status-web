@@ -1,0 +1,40 @@
+{
+  "name": "@repo/react",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./i18n": "./src/i18n-hooks.ts",
+    "./theme": "./src/useTheme.ts",
+    "./MarketData": "./src/MarketDataContext.tsx",
+    "./useMarketData": "./src/useMarketData.ts",
+    "./useRealtime": "./src/useRealtime.ts",
+    "./useFavorites": "./src/useFavorites.ts",
+    "./useAlerts": "./src/useAlerts.ts",
+    "./usePortfolio": "./src/usePortfolio.ts",
+    "./useEventReminders": "./src/useEventReminders.ts",
+    "./useTwoStepConfirm": "./src/useTwoStepConfirm.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@repo/core": "*"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@repo/data": "*",
+    "@testing-library/react": "^16.3.3",
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
+    "jsdom": "^29.1.1",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "typescript": "~5.8.3",
+    "vitest": "^5.0.0",
+    "@testing-library/dom": "^10.4.0"
+  }
+}

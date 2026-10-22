@@ -1,0 +1,25 @@
+{
+  "name": "@repo/data",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./http": "./src/http.ts",
+    "./cg": "./src/cg.ts",
+    "./api": "./src/api.ts",
+    "./kline": "./src/kline.ts",
+    "./realtime-source": "./src/realtime-source.ts",
+    "./crossAsset": "./src/crossAsset/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@repo/core": "*"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.3",
+    "vitest": "^5.0.0"
+  }
+}

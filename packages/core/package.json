@@ -1,0 +1,36 @@
+{
+  "name": "@repo/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./storageBus": "./src/storageBus.ts",
+    "./eventPort": "./src/eventPort.ts",
+    "./models": "./src/models.ts",
+    "./i18n": "./src/i18n/index.ts",
+    "./theme": "./src/theme.ts",
+    "./ta": "./src/ta.ts",
+    "./indicators": "./src/indicators.ts",
+    "./coinAnalysis": "./src/coinAnalysis.ts",
+    "./thresholds": "./src/thresholds.ts",
+    "./format": "./src/format.ts",
+    "./events": "./src/events.ts",
+    "./fng": "./src/fng.ts",
+    "./crossAsset": "./src/crossAsset/index.ts",
+    "./alerts": "./src/alerts.ts",
+    "./eventReminders": "./src/eventReminders.ts",
+    "./portfolio": "./src/portfolio.ts",
+    "./backup": "./src/backup.ts",
+    "./csv": "./src/csv.ts",
+    "./hydrate": "./src/hydrate.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.3",
+    "vitest": "^5.0.0"
+  }
+}

@@ -45,7 +45,7 @@ jobs:
       # .gz/.br 是给 nginx gzip_static/brotli_static 用的预压缩产物，
       # GitHub Pages 不消费它们，删掉以减小部署体积
       - name: Strip precompressed artifacts
-        run: find dist -name "*.gz" -delete -o -name "*.br" -delete
+        run: find apps/web/dist -name "*.gz" -delete -o -name "*.br" -delete
 
       # 仓库未开启 Pages 时自动以 GitHub Actions 为部署源开启（幂等）
       - name: Setup Pages
@@ -56,7 +56,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: dist
+          path: apps/web/dist
 
   # E2E 冒烟：真实构建产物 + 外部行情 API，5 条关键路径
   # （首页出价 / 行情表 / 币种K线 / 换算器 / 创建预警）
@@ -80,17 +80,45 @@ jobs:
 
       - name: Run E2E smoke tests
         run: npx playwright test
+        working-directory: apps/web
 
       - name: Upload test results on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: playwright-report/
+          path: apps/web/playwright-report/
           retention-days: 7
 
+  # iOS：共享包健康检查（expo-doctor 21 项）+ export 产物可构建性
+  # （原生构建走 EAS 云 —— 本地无 CocoaPods，见 ARCHITECTURE）
+  ios:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/ios
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: .
+
+      - name: Expo doctor
+        run: npx expo-doctor
+
+      - name: Export iOS bundle
+        run: npm run export
+
   deploy:
-    needs: [build, e2e]
+    needs: [build, e2e, ios]
     runs-on: ubuntu-latest
     environment:
       name: github-pages

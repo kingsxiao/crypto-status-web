@@ -1,0 +1,22 @@
+{
+  "name": "@repo/platform",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./native": "./src/native.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@repo/core": "*"
+  },
+  "peerDependencies": {
+    "@react-native-async-storage/async-storage": ">=1.21.0"
+  },
+  "devDependencies": {
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "typescript": "~5.8.3"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "@repo/ui-tokens",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./theme": "./src/theme.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@repo/core": "*"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.3",
+    "vitest": "^5.0.0"
+  }
+}
